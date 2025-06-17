@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm run build --workspace=djdreams",
+  "outputDirectory": "apps/DJDreams/.next"
+} 
