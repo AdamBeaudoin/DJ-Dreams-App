@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import { useAnalytics } from '@/hooks/use-analytics'
 
 // Dynamically import ReactPlayer to ensure it only loads on client-side
 const ReactPlayer = dynamic(() => import('react-player/youtube'), {
@@ -75,25 +74,16 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
   const [played, setPlayed] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const playerRef = useRef<any>(null)
-  const { viewerCount, trackEvent } = useAnalytics()
 
   // Handle manual shuffle
   useEffect(() => {
     if (shuffleTrigger > 0) {
-      const nextIndex = (currentSetIndex + 1) % DJ_SETS.length
-      setCurrentSetIndex(nextIndex)
+      setCurrentSetIndex(prev => (prev + 1) % DJ_SETS.length)
       setStreamError(false)
       setIsTransitioning(false)
       setPlayed(0)
-      
-      // Track manual shuffle
-      trackEvent('track_shuffle', {
-        from_track: DJ_SETS[currentSetIndex].title,
-        to_track: DJ_SETS[nextIndex].title,
-        trigger: 'manual'
-      })
     }
-  }, [shuffleTrigger, currentSetIndex, trackEvent])
+  }, [shuffleTrigger])
 
   useEffect(() => {
     // Calculate which set should be playing based on time
@@ -161,13 +151,6 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
   const handleReady = () => {
     setIsPlaying(true)
     setStreamError(false)
-    
-    // Track track start
-    trackEvent('track_start', {
-      track_title: DJ_SETS[currentSetIndex].title,
-      track_index: currentSetIndex,
-      url: DJ_SETS[currentSetIndex].url
-    })
   }
 
   if (streamError) {
@@ -228,10 +211,6 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
                 {DJ_SETS[currentSetIndex].title}
               </h3>
               <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
-                <span className="flex items-center gap-1">
-                  👥 {viewerCount.toLocaleString()}
-                  <span className="hidden sm:inline">viewers</span>
-                </span>
                 <span className="flex items-center gap-1">
                   ⏱️ {Math.round(played * 100)}%
                   <span className="hidden sm:inline">played</span>

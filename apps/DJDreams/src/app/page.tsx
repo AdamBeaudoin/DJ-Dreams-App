@@ -4,20 +4,12 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
-import { useAnalytics } from '@/hooks/use-analytics'
 
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
-  const { trackEvent } = useAnalytics()
 
   const handleShuffle = () => {
     setShuffleTrigger(prev => prev + 1)
-    
-    // Track shuffle button click
-    trackEvent('shuffle_button_clicked', {
-      trigger_count: shuffleTrigger + 1,
-      timestamp: new Date().toISOString()
-    })
   }
 
   return (

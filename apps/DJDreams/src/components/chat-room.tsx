@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult } from '@worldcoin/minikit-js'
-import { useAnalytics } from '@/hooks/use-analytics'
 
 interface ChatMessage {
   id: string
@@ -24,7 +23,6 @@ export function ChatRoom() {
   const [nullifierHash, setNullifierHash] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
-  const { updateVerification, trackEvent } = useAnalytics()
 
   // Mock messages for demo - these would come from your backend in production
   useEffect(() => {
@@ -67,52 +65,46 @@ export function ChatRoom() {
     setIsLoading(true)
     
     try {
-      // Check if MiniKit is available (running in World App)
-      if (!MiniKit.isInstalled()) {
-        toast({
-          title: "World App Required",
-          description: "Please open this app in World App to verify your World ID",
-          variant: "destructive",
-        })
-        setIsLoading(false)
-        return
-      }
-
-      // Set up the verification payload according to World documentation
       const verifyPayload: VerifyCommandInput = {
-        action: 'dj-dreams-chat', // This should match your action ID in the World Developer Portal
-        signal: window.location.origin, // Optional signal - using the app origin
-        verification_level: VerificationLevel.Orb, // Require Orb verification for highest security
+        action: 'dj-dreams-chat',
+        signal: window.location.origin,
+        verification_level: VerificationLevel.Orb
       }
 
-      // World App will open a drawer prompting the user to confirm the operation
+      console.log('Starting World ID verification with payload:', verifyPayload)
+      
       const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload)
       
+      console.log('World ID verification response:', finalPayload)
+
       if (finalPayload.status === 'error') {
-        console.log('World ID verification error:', finalPayload)
+        console.log('World ID verification failed:', finalPayload)
         toast({
-          title: "Verification Failed", 
-          description: "Could not verify your World ID",
+          title: "Verification Failed",
+          description: "World ID verification failed",
           variant: "destructive",
         })
-        setIsLoading(false)
         return
       }
 
-      // Verify the proof in the backend
+      // Send proof to our backend for verification
       const verifyResponse = await fetch('/api/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          payload: finalPayload as ISuccessResult, // Parses only the fields we need to verify
+          proof: finalPayload.proof,
+          merkle_root: finalPayload.merkle_root,
+          nullifier_hash: finalPayload.nullifier_hash,
+          verification_level: finalPayload.verification_level,
           action: 'dj-dreams-chat',
-          signal: window.location.origin,
-        }),
+          signal: window.location.origin
+        })
       })
 
       const verifyResponseJson = await verifyResponse.json()
+      console.log('Backend verification response:', verifyResponseJson)
       
       if (verifyResponseJson.status === 200) {
         // Verification successful!
@@ -123,18 +115,9 @@ export function ChatRoom() {
         setUserWallet(userIdentifier)
         setNullifierHash(successPayload.nullifier_hash)
         
-        // Update analytics with verification
-        await updateVerification(successPayload.nullifier_hash)
-        
         toast({
           title: "Verified! ✅",
           description: "You can now chat with other verified humans",
-        })
-        
-        // Track successful verification
-        trackEvent('world_id_verified', {
-          user_identifier: userIdentifier,
-          verification_level: 'orb'
         })
       } else {
         // Backend verification failed
@@ -170,13 +153,6 @@ export function ChatRoom() {
 
     setMessages(prev => [...prev, message])
     setNewMessage('')
-    
-    // Track message sent
-    trackEvent('chat_message_sent', {
-      message_length: newMessage.trim().length,
-      user_verified: true,
-      timestamp: new Date().toISOString()
-    })
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -198,7 +174,7 @@ export function ChatRoom() {
           <span className="text-xs text-gray-400">({messages.length} messages)</span>
         </h3>
         {!isVerified && (
-          <Button
+          <Button 
             onClick={handleVerifyWorldID}
             disabled={isLoading}
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3 py-1 min-h-[44px] rounded-lg touch-manipulation"
@@ -263,7 +239,7 @@ export function ChatRoom() {
             className="flex-1 bg-black/20 border-white/10 text-white placeholder-gray-400 text-sm min-h-[44px]"
             maxLength={200}
           />
-          <Button
+          <Button 
             onClick={handleSendMessage}
             disabled={!newMessage.trim()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 min-h-[44px] rounded-lg text-sm"
