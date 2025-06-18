@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { track } from '@vercel/analytics'
 
 export function useAnalytics() {
   const [viewerCount, setViewerCount] = useState(0)
@@ -12,7 +11,7 @@ export function useAnalytics() {
     setIsLoading(false)
 
     // Track page view
-    track('page_view', { page: 'stream' })
+    console.log('page_view', { page: 'stream' })
 
     // Simulate slight fluctuations every 30 seconds
     const interval = setInterval(() => {
@@ -30,7 +29,7 @@ export function useAnalytics() {
     console.log('Mock verification for:', worldId)
     
     // Track World ID verification
-    track('world_id_verification', { 
+    console.log('world_id_verification', { 
       success: true,
       user_id: worldId.substring(0, 8) // Only track first 8 chars for privacy
     })
@@ -39,7 +38,7 @@ export function useAnalytics() {
   }
 
   const trackEvent = (eventName: string, properties?: Record<string, any>) => {
-    track(eventName, properties)
+    console.log(eventName, properties)
   }
 
   return { 
