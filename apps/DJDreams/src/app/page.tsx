@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
 
@@ -16,9 +17,11 @@ export default function HomePage() {
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <header className="text-center mb-6 sm:mb-8">
           <div className="mb-3 sm:mb-4 flex justify-center">
-            <img 
+            <Image 
               src="/DJ-Dreams-Logo.jpg" 
               alt="DJ Dreams Logo" 
+              width={280}
+              height={96}
               className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain max-w-[280px] sm:max-w-none"
               onLoad={() => console.log('Logo loaded successfully')}
               onError={(e) => {
@@ -27,6 +30,7 @@ export default function HomePage() {
                 const fallback = document.getElementById('logo-fallback');
                 if (fallback) fallback.style.display = 'block';
               }}
+              priority
             />
             <h1 
               id="logo-fallback"

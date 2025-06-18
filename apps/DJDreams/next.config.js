@@ -2,13 +2,12 @@
 const nextConfig = {
   images: {
     domains: ['img.youtube.com', 'i.ytimg.com'],
-    unoptimized: true, // Required for static export
+    unoptimized: true,
   },
-  // Configuration for subdirectory deployment
-  basePath: process.env.NODE_ENV === 'production' ? '/radio' : '',
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/radio' : '',
-  trailingSlash: true,
-  // Remove output: 'export' for now to avoid server actions issue
+  // Basic config that works for both local dev and Vercel
+  experimental: {
+    // Enable modern features
+  },
 }
 
 module.exports = nextConfig 
