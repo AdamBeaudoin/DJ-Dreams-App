@@ -79,7 +79,7 @@ export function ChatRoom() {
       const verifyPayload: VerifyCommandInput = {
         action: 'dj-dreams-chat-verification', // This should match your action ID from the Developer Portal
         signal: window.location.origin, // Optional additional data
-        verification_level: VerificationLevel.Orb // Orb | Device
+        verification_level: VerificationLevel.Device // Device level for better UX
       }
 
       console.log('Starting World ID verification with payload:', verifyPayload)
