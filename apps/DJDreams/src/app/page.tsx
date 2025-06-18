@@ -4,17 +4,25 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
+import { useAnalytics } from '@/hooks/use-analytics'
 
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
+  const { trackEvent } = useAnalytics()
 
   const handleShuffle = () => {
     setShuffleTrigger(prev => prev + 1)
+    
+    // Track shuffle button click
+    trackEvent('shuffle_button_clicked', {
+      trigger_count: shuffleTrigger + 1,
+      timestamp: new Date().toISOString()
+    })
   }
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-5xl">
         <header className="text-center mb-6 sm:mb-8">
           <div className="mb-3 sm:mb-4 flex justify-center">
             <Image 
@@ -43,13 +51,13 @@ export default function HomePage() {
           <p className="text-base sm:text-lg md:text-xl text-gray-300 mb-6 sm:mb-8 px-4">
             DJ sets from around the world
           </p>
-          <div className="flex justify-center gap-3 sm:gap-4">
+          <div className="flex justify-center gap-3 sm:gap-4 flex-wrap">
             <div className="px-4 sm:px-6 py-3 sm:py-2 bg-white/20 text-white rounded-lg text-sm sm:text-base font-medium min-h-[44px] flex items-center border-2 border-white/30">
               🔴 Live
             </div>
             <button 
               onClick={handleShuffle}
-              className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2"
+              className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
             >
               🔀 Shuffle
             </button>
@@ -61,7 +69,7 @@ export default function HomePage() {
             <StreamPlayer shuffleTrigger={shuffleTrigger} />
           </div>
           
-          <div className="mb-6 sm:mb-8">
+          <div className="mb-6 sm:mb-8 pb-safe">
             <ChatRoom />
           </div>
         </main>

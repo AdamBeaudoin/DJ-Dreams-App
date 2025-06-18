@@ -1,8 +1,21 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import ReactPlayer from 'react-player/youtube'
+import dynamic from 'next/dynamic'
 import { useAnalytics } from '@/hooks/use-analytics'
+
+// Dynamically import ReactPlayer to ensure it only loads on client-side
+const ReactPlayer = dynamic(() => import('react-player/youtube'), {
+  ssr: false,
+  loading: () => (
+    <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
+      <div className="text-center text-white">
+        <div className="text-lg mb-2">Loading live stream...</div>
+        <div className="text-sm text-gray-400">Initializing player...</div>
+      </div>
+    </div>
+  )
+})
 
 const DJ_SETS = [
   {
@@ -32,6 +45,18 @@ const DJ_SETS = [
   {
     url: 'https://www.youtube.com/watch?v=C_u9kRVjR_A',
     title: 'SEVEN - CRYME | HÖR'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=ybN2pf3B57c',
+    title: 'Fred Again & Skepta - Victory Lap'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=xgJBhezlMoE',
+    title: 'Overmono | Boiler Room'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=-w3xYI64LSo',
+    title: 'Job Jobse | Boiler Room'
   }
 ]
 
@@ -43,34 +68,34 @@ interface StreamPlayerProps {
 }
 
 export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
-  const [isClient, setIsClient] = useState(false)
   const [streamError, setStreamError] = useState(false)
   const [currentSetIndex, setCurrentSetIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [played, setPlayed] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const playerRef = useRef<ReactPlayer>(null)
-  const { viewerCount } = useAnalytics()
+  const playerRef = useRef<any>(null)
+  const { viewerCount, trackEvent } = useAnalytics()
 
   // Handle manual shuffle
   useEffect(() => {
     if (shuffleTrigger > 0) {
-      setCurrentSetIndex(prev => (prev + 1) % DJ_SETS.length)
+      const nextIndex = (currentSetIndex + 1) % DJ_SETS.length
+      setCurrentSetIndex(nextIndex)
       setStreamError(false)
       setIsTransitioning(false)
       setPlayed(0)
+      
+      // Track manual shuffle
+      trackEvent('track_shuffle', {
+        from_track: DJ_SETS[currentSetIndex].title,
+        to_track: DJ_SETS[nextIndex].title,
+        trigger: 'manual'
+      })
     }
-  }, [shuffleTrigger])
+  }, [shuffleTrigger, currentSetIndex, trackEvent])
 
   useEffect(() => {
-    // Ensure we're in the browser environment
-    const timer = setTimeout(() => {
-      setIsClient(true)
-      setIsLoading(false)
-    }, 100) // Small delay to ensure proper hydration
-    
     // Calculate which set should be playing based on time
     const now = Date.now()
     const startTime = new Date('2025-01-01').getTime()
@@ -86,10 +111,7 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
       setPlayed(0)
     }, ROTATION_INTERVAL)
 
-    return () => {
-      clearTimeout(timer)
-      clearInterval(interval)
-    }
+    return () => clearInterval(interval)
   }, [])
 
   const handleProgress = (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
@@ -133,25 +155,19 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
       setCurrentSetIndex(prev => (prev + 1) % DJ_SETS.length)
       setStreamError(false)
       setPlayed(0)
-      setIsLoading(false)
     }, 3000)
   }
 
   const handleReady = () => {
     setIsPlaying(true)
-    setIsLoading(false)
     setStreamError(false)
-  }
-
-  if (!isClient || isLoading) {
-    return (
-      <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="text-lg mb-2">Loading live stream...</div>
-          <div className="text-sm text-gray-400">Initializing player...</div>
-        </div>
-      </div>
-    )
+    
+    // Track track start
+    trackEvent('track_start', {
+      track_title: DJ_SETS[currentSetIndex].title,
+      track_index: currentSetIndex,
+      url: DJ_SETS[currentSetIndex].url
+    })
   }
 
   if (streamError) {
@@ -197,37 +213,30 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
         {/* Transition indicator */}
         {isTransitioning && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
-            <p className="text-white text-xl animate-pulse">Loading next set...</p>
+            <div className="text-white text-center">
+              <div className="text-lg mb-2">Switching to next set...</div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+            </div>
           </div>
         )}
 
-        {/* Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-          {/* Progress Bar */}
-          <div className="w-full bg-white/20 rounded-full h-1.5 mb-2">
-            <div className="bg-cyan-400 h-1.5 rounded-full" style={{ width: `${played * 100}%` }}></div>
-          </div>
-          
-          {/* Now Playing / Viewers / Up Next */}
-          <div className="flex justify-between items-end text-white">
-            {/* Now Playing */}
-            <div className="w-1/3">
-              <p className="text-xs text-gray-400">Now Playing</p>
-              <h2 className="text-sm font-bold truncate">{DJ_SETS[currentSetIndex].title}</h2>
-            </div>
-
-            {/* Viewer Count */}
-            <div className="text-center">
-              <div className="text-xs flex items-center justify-center gap-1.5 bg-black/50 px-2 py-0.5 rounded-full">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                {viewerCount.toLocaleString()} watching
+        {/* Now Playing Info */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-4">
+          <div className="flex items-center justify-between text-white">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm sm:text-lg font-semibold mb-1 truncate">
+                {DJ_SETS[currentSetIndex].title}
+              </h3>
+              <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
+                <span className="flex items-center gap-1">
+                  👥 {viewerCount.toLocaleString()}
+                  <span className="hidden sm:inline">viewers</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  ⏱️ {Math.round(played * 100)}%
+                  <span className="hidden sm:inline">played</span>
+                </span>
               </div>
-            </div>
-
-            {/* Up Next */}
-            <div className="w-1/3 text-right">
-              <p className="text-xs text-gray-400">Up Next</p>
-              <h3 className="text-sm font-light truncate text-gray-300">{DJ_SETS[(currentSetIndex + 1) % DJ_SETS.length].title}</h3>
             </div>
           </div>
         </div>
