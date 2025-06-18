@@ -259,10 +259,8 @@ export function ChatRoom() {
         </div>
       ) : (
         <div className="text-center text-gray-400 text-sm py-4 border border-gray-600 rounded-lg">
-          <div className="mb-2">🌍 Verify your World ID to join the conversation</div>
-          <div className="text-xs text-gray-500">
-            Only verified humans can chat • Prevents bots and spam
-          </div>
+                          <div className="mb-2">🌍 Verify your World ID to chat</div>
+
         </div>
       )}
     </div>
