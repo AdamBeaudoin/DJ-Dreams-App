@@ -65,14 +65,26 @@ export function ChatRoom() {
     setIsLoading(true)
     
     try {
+      // Check if MiniKit is available (running in World App)
+      if (!MiniKit.isInstalled()) {
+        toast({
+          title: "World App Required",
+          description: "Please open this app in World App to verify your World ID",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+
       const verifyPayload: VerifyCommandInput = {
-        action: 'dj-dreams-chat',
-        signal: window.location.origin,
-        verification_level: VerificationLevel.Orb
+        action: 'dj-dreams-chat', // This should match your action ID from the Developer Portal
+        signal: window.location.origin, // Optional additional data
+        verification_level: VerificationLevel.Orb // Orb | Device
       }
 
       console.log('Starting World ID verification with payload:', verifyPayload)
       
+      // World App will open a drawer prompting the user to confirm the operation
       const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload)
       
       console.log('World ID verification response:', finalPayload)
@@ -87,20 +99,17 @@ export function ChatRoom() {
         return
       }
 
-      // Send proof to our backend for verification
+      // Verify the proof in the backend
       const verifyResponse = await fetch('/api/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          proof: finalPayload.proof,
-          merkle_root: finalPayload.merkle_root,
-          nullifier_hash: finalPayload.nullifier_hash,
-          verification_level: finalPayload.verification_level,
+          payload: finalPayload as ISuccessResult, // Parses only the fields we need to verify
           action: 'dj-dreams-chat',
-          signal: window.location.origin
-        })
+          signal: window.location.origin, // Optional
+        }),
       })
 
       const verifyResponseJson = await verifyResponse.json()
