@@ -77,7 +77,7 @@ export function ChatRoom() {
       }
 
       const verifyPayload: VerifyCommandInput = {
-        action: 'dj-dreams-chat', // This should match your action ID from the Developer Portal
+        action: 'dj-dreams-chat-verification', // This should match your action ID from the Developer Portal
         signal: window.location.origin, // Optional additional data
         verification_level: VerificationLevel.Orb // Orb | Device
       }
@@ -107,7 +107,7 @@ export function ChatRoom() {
         },
         body: JSON.stringify({
           payload: finalPayload as ISuccessResult, // Parses only the fields we need to verify
-          action: 'dj-dreams-chat',
+          action: 'dj-dreams-chat-verification',
           signal: window.location.origin, // Optional
         }),
       })
