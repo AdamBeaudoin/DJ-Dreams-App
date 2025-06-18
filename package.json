@@ -5,10 +5,10 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=djdreams",
-    "build": "npm run build --workspace=djdreams",
-    "start": "npm run start --workspace=djdreams",
-    "lint": "npm run lint --workspace=djdreams",
+    "dev": "npm run dev --workspace=DJDreams",
+    "build": "npm run build --workspace=DJDreams",
+    "start": "npm run start --workspace=DJDreams",
+    "lint": "npm run lint --workspace=DJDreams",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
