@@ -50,6 +50,7 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
   const [duration, setDuration] = useState(0)
   const [played, setPlayed] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const playerRef = useRef<ReactPlayer>(null)
   const { viewerCount } = useAnalytics()
 
@@ -64,7 +65,11 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
   }, [shuffleTrigger])
 
   useEffect(() => {
-    setIsClient(true)
+    // Ensure we're in the browser environment
+    const timer = setTimeout(() => {
+      setIsClient(true)
+      setIsLoading(false)
+    }, 100) // Small delay to ensure proper hydration
     
     // Calculate which set should be playing based on time
     const now = Date.now()
@@ -81,7 +86,10 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
       setPlayed(0)
     }, ROTATION_INTERVAL)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(timer)
+      clearInterval(interval)
+    }
   }, [])
 
   const handleProgress = (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
@@ -117,24 +125,31 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
     }
   }
 
-  const handleError = () => {
+  const handleError = (error: any) => {
+    console.log('Stream error:', error)
     setStreamError(true)
     // Auto-recover by switching to next video after 3 seconds
     setTimeout(() => {
       setCurrentSetIndex(prev => (prev + 1) % DJ_SETS.length)
       setStreamError(false)
       setPlayed(0)
+      setIsLoading(false)
     }, 3000)
   }
 
   const handleReady = () => {
     setIsPlaying(true)
+    setIsLoading(false)
+    setStreamError(false)
   }
 
-  if (!isClient) {
+  if (!isClient || isLoading) {
     return (
       <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
-        <div className="text-white text-lg">Loading live stream...</div>
+        <div className="text-center text-white">
+          <div className="text-lg mb-2">Loading live stream...</div>
+          <div className="text-sm text-gray-400">Initializing player...</div>
+        </div>
       </div>
     )
   }
