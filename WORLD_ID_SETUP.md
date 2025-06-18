@@ -46,7 +46,7 @@ NEXT_PUBLIC_APP_ID=app_staging_xxxxxx
 ```
 
 #### For Local Development:
-Create `apps/djdreams/.env.local`:
+Create `apps/DJDreams/.env.local`:
 ```
 NEXT_PUBLIC_APP_ID=app_staging_xxxxxx
 ```
