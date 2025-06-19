@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase, type ChatMessageInsert } from '@/lib/supabase'
 import { moderateMessage, validateMessage } from '@/lib/moderation'
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic'
+
 interface SendMessageRequest {
   message: string
   userId: string
