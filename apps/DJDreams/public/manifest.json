@@ -9,9 +9,14 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/DJ-Dreams-Logo.jpg",
-      "sizes": "280x96",
-      "type": "image/jpeg",
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],

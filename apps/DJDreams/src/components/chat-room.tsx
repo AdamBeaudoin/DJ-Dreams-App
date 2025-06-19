@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/use-toast'
-import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult } from '@worldcoin/minikit-js'
+import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult, WalletAuthInput } from '@worldcoin/minikit-js'
 import { useRealtimeChat } from '@/hooks/useRealtimeChat'
 import type { ChatMessage } from '@/lib/supabase'
 
@@ -16,6 +16,8 @@ export function ChatRoom() {
   const [isSending, setIsSending] = useState(false)
   const [userWallet, setUserWallet] = useState<string>('')
   const [nullifierHash, setNullifierHash] = useState<string>('')
+  const [worldIdUsername, setWorldIdUsername] = useState<string>('')
+  const [isConnectingWallet, setIsConnectingWallet] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   
@@ -26,6 +28,33 @@ export function ChatRoom() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Function to fetch World ID username
+  const fetchWorldIdUsername = async (): Promise<string | null> => {
+    try {
+      // First try to get username from MiniKit user if available
+      if (MiniKit.user && MiniKit.user.username) {
+        console.log('Found username from MiniKit.user:', MiniKit.user.username)
+        return MiniKit.user.username
+      }
+
+      // If wallet address is available, try to fetch username by address
+      if (MiniKit.user && MiniKit.user.walletAddress) {
+        console.log('Fetching username by address:', MiniKit.user.walletAddress)
+        const worldIdUser = await MiniKit.getUserByAddress(MiniKit.user.walletAddress)
+        if (worldIdUser && worldIdUser.username) {
+          console.log('Found username by address:', worldIdUser.username)
+          return worldIdUser.username
+        }
+      }
+
+      console.log('No World ID username found')
+      return null
+    } catch (error) {
+      console.error('Error fetching World ID username:', error)
+      return null
+    }
+  }
 
   const handleVerifyWorldID = async () => {
     setIsVerifying(true)
@@ -82,15 +111,24 @@ export function ChatRoom() {
       
       if (verifyResponseJson.status === 200) {
         const successPayload = finalPayload as ISuccessResult
-        const userIdentifier = `Human #${successPayload.nullifier_hash.slice(-6)}`
+        
+        // Try to get username without prompting (in case wallet is already connected)
+        let worldIdUsername: string | null = await fetchWorldIdUsername()
+        
+        // Use World ID username if available, otherwise fallback to hash-based identifier
+        const displayUsername = worldIdUsername || `Human #${successPayload.nullifier_hash.slice(-6)}`
         
         setIsVerified(true)
-        setUserWallet(userIdentifier)
+        setUserWallet(displayUsername)
         setNullifierHash(successPayload.nullifier_hash)
+        setWorldIdUsername(worldIdUsername || '')
         
         toast({
           title: "Verified! ✅",
-          description: "You can now chat with other verified humans",
+          description: worldIdUsername 
+            ? `Welcome ${worldIdUsername}! You can now chat with other verified humans`
+            : "You can now chat with other verified humans. Want to show your World ID username? Connect your wallet in settings.",
+          duration: worldIdUsername ? 3000 : 5000, // Longer duration for the username hint
         })
       } else {
         console.log('Backend verification failed:', verifyResponseJson)
@@ -109,6 +147,62 @@ export function ChatRoom() {
       })
     } finally {
       setIsVerifying(false)
+    }
+  }
+
+  const handleConnectWallet = async () => {
+    setIsConnectingWallet(true)
+    
+    try {
+      console.log('User requested wallet connection for username...')
+      
+      const walletAuthPayload: WalletAuthInput = {
+        nonce: Math.random().toString(36).substring(2),
+        requestId: Math.random().toString(36).substring(2),
+        expirationTime: new Date(Date.now() + 5 * 60 * 1000),
+        notBefore: new Date(),
+        statement: "Connect your wallet to display your World ID username (no transactions will be made)"
+      }
+      
+      const walletAuthResult = await MiniKit.commandsAsync.walletAuth(walletAuthPayload)
+      
+      if (walletAuthResult.finalPayload.status === 'success') {
+        console.log('Wallet authentication successful:', walletAuthResult.finalPayload)
+        
+        // Now try to fetch the username
+        const worldIdUsername = await fetchWorldIdUsername()
+        
+        if (worldIdUsername) {
+          setWorldIdUsername(worldIdUsername)
+          setUserWallet(worldIdUsername)
+          
+          toast({
+            title: "Wallet Connected! 🌍",
+            description: `Now showing as ${worldIdUsername}`,
+          })
+        } else {
+          toast({
+            title: "Wallet Connected",
+            description: "Wallet connected, but no World ID username found",
+            variant: "destructive",
+          })
+        }
+      } else {
+        console.log('Wallet authentication cancelled:', walletAuthResult.finalPayload)
+        toast({
+          title: "Connection Cancelled",
+          description: "Wallet connection was cancelled",
+        })
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect wallet. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsConnectingWallet(false)
     }
   }
 
@@ -198,21 +292,31 @@ export function ChatRoom() {
           </div>
         ) : (
           <div className="space-y-3">
-            {messages.map((message) => (
-              <div key={message.id} className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className={`font-medium ${message.verified ? 'text-green-400' : 'text-gray-400'}`}>
-                    {message.verified ? '✅' : '👤'} {message.username}
-                  </span>
-                  <span className="text-gray-500">
-                    {formatTime(message.created_at)}
-                  </span>
+            {messages.map((message) => {
+              // Check if username is a World ID username (not hash-based)
+              const isWorldIdUsername = message.username && !message.username.startsWith('Human #')
+              
+              return (
+                <div key={message.id} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={`font-medium ${message.verified ? 'text-green-400' : 'text-gray-400'}`}>
+                      {message.verified ? (isWorldIdUsername ? '🌍' : '✅') : '👤'} {message.username}
+                    </span>
+                    {isWorldIdUsername && (
+                      <span className="text-blue-400 text-xs bg-blue-400/10 px-1 rounded">
+                        World ID
+                      </span>
+                    )}
+                    <span className="text-gray-500">
+                      {formatTime(message.created_at)}
+                    </span>
+                  </div>
+                  <div className="text-white text-sm bg-white/5 rounded-lg px-3 py-2 ml-4 break-words">
+                    {message.message}
+                  </div>
                 </div>
-                <div className="text-white text-sm bg-white/5 rounded-lg px-3 py-2 ml-4 break-words">
-                  {message.message}
-                </div>
-              </div>
-            ))}
+              )
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -259,9 +363,38 @@ export function ChatRoom() {
       )}
       
       {isVerified && (
-        <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
-          <div className="w-2 h-2 bg-green-400 rounded-full" />
-          Verified as {userWallet}
+        <div className="mt-2 flex items-center justify-between">
+          <div className="text-xs text-green-400 flex items-center gap-1">
+            <div className="w-2 h-2 bg-green-400 rounded-full" />
+            {worldIdUsername ? (
+              <span>
+                Verified as <span className="font-medium">{worldIdUsername}</span>
+                <span className="text-blue-400 ml-1">🌍</span>
+              </span>
+            ) : (
+              <span>Verified as {userWallet}</span>
+            )}
+          </div>
+          
+          {/* Show connect wallet button only if user doesn't have World ID username */}
+          {!worldIdUsername && (
+            <Button
+              onClick={handleConnectWallet}
+              disabled={isConnectingWallet}
+              variant="outline"
+              size="sm"
+              className="text-xs px-2 py-1 h-6 bg-transparent border-blue-400/30 text-blue-400 hover:bg-blue-400/10"
+            >
+              {isConnectingWallet ? (
+                <div className="flex items-center gap-1">
+                  <Spinner size="sm" />
+                  <span>Connecting...</span>
+                </div>
+              ) : (
+                <span>🌍 Show Username</span>
+              )}
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -31,8 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         verifyRes, 
         status: 200,
-        message: 'Verification successful'
-        
+        message: 'Verification successful' 
       })
     } else {
       // This is where you should handle errors from the World ID /verify endpoint.
