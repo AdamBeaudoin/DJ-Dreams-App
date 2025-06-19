@@ -15,7 +15,7 @@ export function useRealtimeChat() {
       const data = await response.json()
       
       if (data.status === 200) {
-        setMessages(data.messages)
+        setMessages(data.messages || [])
       } else {
         console.error('Failed to fetch messages:', data.error)
       }
@@ -79,6 +79,13 @@ export function useRealtimeChat() {
   // Set up real-time subscription
   useEffect(() => {
     fetchMessages()
+
+    // Only set up real-time subscription if Supabase is configured
+    if (!supabase) {
+      console.log('Supabase not configured - real-time chat disabled')
+      setIsConnected(false)
+      return
+    }
 
     // Subscribe to new messages
     const channel = supabase

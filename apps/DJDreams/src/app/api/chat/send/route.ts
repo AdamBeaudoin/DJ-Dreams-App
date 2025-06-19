@@ -12,6 +12,14 @@ interface SendMessageRequest {
 
 export async function POST(req: NextRequest) {
   try {
+    // Return early if Supabase is not configured
+    if (!supabase) {
+      return NextResponse.json({ 
+        error: 'Chat system not configured - Supabase required',
+        status: 503 
+      })
+    }
+
     const { message, userId, username, nullifierHash, verified }: SendMessageRequest = await req.json()
 
     // Validate the message

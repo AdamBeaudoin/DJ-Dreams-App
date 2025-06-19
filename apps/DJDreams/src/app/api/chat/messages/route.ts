@@ -3,6 +3,15 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
+    // Return early if Supabase is not configured
+    if (!supabase) {
+      return NextResponse.json({ 
+        messages: [],
+        status: 200,
+        message: 'Chat system not configured' 
+      })
+    }
+
     const url = new URL(req.url)
     const limit = parseInt(url.searchParams.get('limit') || '50')
     const offset = parseInt(url.searchParams.get('offset') || '0')
