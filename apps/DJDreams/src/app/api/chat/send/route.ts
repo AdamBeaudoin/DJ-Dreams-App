@@ -55,9 +55,9 @@ export async function POST(req: NextRequest) {
     // Prepare message for database
     const messageData: ChatMessageInsert = {
       user_id: userId,
-      username,
+      username: username,
       message: moderation.filteredMessage, // Use filtered version
-      verified,
+      verified: verified,
       nullifier_hash: nullifierHash,
       is_moderated: !moderation.isClean
     }

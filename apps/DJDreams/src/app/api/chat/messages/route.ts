@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .order('timestamp', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
     if (error) {

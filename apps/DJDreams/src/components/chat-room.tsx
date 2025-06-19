@@ -3,58 +3,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/use-toast'
 import { MiniKit, VerifyCommandInput, VerificationLevel, ISuccessResult } from '@worldcoin/minikit-js'
-
-interface ChatMessage {
-  id: string
-  user: string
-  message: string
-  timestamp: Date
-  verified: boolean
-}
+import { useRealtimeChat } from '@/hooks/useRealtimeChat'
+import type { ChatMessage } from '@/lib/supabase'
 
 export function ChatRoom() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isVerified, setIsVerified] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [isSending, setIsSending] = useState(false)
   const [userWallet, setUserWallet] = useState<string>('')
   const [nullifierHash, setNullifierHash] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
-
-  // Mock messages for demo - these would come from your backend in production
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const mockMessages: ChatMessage[] = [
-        {
-          id: '1',
-          user: 'Verified Human #1',
-          message: 'This track is fire! 🔥',
-          timestamp: new Date(Date.now() - 300000),
-          verified: true
-        },
-        {
-          id: '2',
-          user: 'Verified Human #2',
-          message: 'Love the vibe tonight',
-          timestamp: new Date(Date.now() - 180000),
-          verified: true
-        },
-        {
-          id: '3',
-          user: 'Verified Human #3',
-          message: 'Anyone know the track ID?',
-          timestamp: new Date(Date.now() - 60000),
-          verified: true
-        }
-      ]
-      setMessages(mockMessages)
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [])
+  
+  // Use the real-time chat hook
+  const { messages, isLoading, isConnected, sendMessage } = useRealtimeChat()
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
@@ -62,7 +28,7 @@ export function ChatRoom() {
   }, [messages])
 
   const handleVerifyWorldID = async () => {
-    setIsLoading(true)
+    setIsVerifying(true)
     
     try {
       // Check if MiniKit is available (running in World App)
@@ -72,19 +38,18 @@ export function ChatRoom() {
           description: "Please open this app in World App to verify your World ID",
           variant: "destructive",
         })
-        setIsLoading(false)
+        setIsVerifying(false)
         return
       }
 
       const verifyPayload: VerifyCommandInput = {
-        action: 'dj-dreams-chat-verification', // This should match your action ID from the Developer Portal
-        signal: window.location.origin, // Optional additional data
-        verification_level: VerificationLevel.Device // Device level for better UX
+        action: 'dj-dreams-chat-verification',
+        signal: window.location.origin,
+        verification_level: VerificationLevel.Device
       }
 
       console.log('Starting World ID verification with payload:', verifyPayload)
       
-      // World App will open a drawer prompting the user to confirm the operation
       const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload)
       
       console.log('World ID verification response:', finalPayload)
@@ -106,9 +71,9 @@ export function ChatRoom() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          payload: finalPayload as ISuccessResult, // Parses only the fields we need to verify
+          payload: finalPayload as ISuccessResult,
           action: 'dj-dreams-chat-verification',
-          signal: window.location.origin, // Optional
+          signal: window.location.origin,
         }),
       })
 
@@ -116,7 +81,6 @@ export function ChatRoom() {
       console.log('Backend verification response:', verifyResponseJson)
       
       if (verifyResponseJson.status === 200) {
-        // Verification successful!
         const successPayload = finalPayload as ISuccessResult
         const userIdentifier = `Human #${successPayload.nullifier_hash.slice(-6)}`
         
@@ -129,7 +93,6 @@ export function ChatRoom() {
           description: "You can now chat with other verified humans",
         })
       } else {
-        // Backend verification failed
         console.log('Backend verification failed:', verifyResponseJson)
         toast({
           title: "Verification Failed",
@@ -145,23 +108,30 @@ export function ChatRoom() {
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsVerifying(false)
     }
   }
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !isVerified) return
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !isVerified || isSending) return
 
-    const message: ChatMessage = {
-      id: Date.now().toString(),
-      user: userWallet,
-      message: newMessage.trim(),
-      timestamp: new Date(),
-      verified: true
+    setIsSending(true)
+    
+    try {
+      await sendMessage(
+        newMessage.trim(),
+        nullifierHash || userWallet,
+        userWallet,
+        nullifierHash,
+        isVerified
+      )
+      setNewMessage('')
+    } catch (error) {
+      // Error is already handled in the hook with toast
+      console.error('Failed to send message:', error)
+    } finally {
+      setIsSending(false)
     }
-
-    setMessages(prev => [...prev, message])
-    setNewMessage('')
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -171,8 +141,8 @@ export function ChatRoom() {
     }
   }
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   return (
@@ -181,54 +151,65 @@ export function ChatRoom() {
         <h3 className="text-white font-semibold text-sm sm:text-base flex items-center gap-2">
           💬 Live Chat
           <span className="text-xs text-gray-400">({messages.length} messages)</span>
+          {/* Connection status indicator */}
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} 
+               title={isConnected ? 'Connected' : 'Disconnected'} />
         </h3>
         {!isVerified && (
           <Button 
             onClick={handleVerifyWorldID}
-            disabled={isLoading}
+            disabled={isVerifying}
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3 py-1 min-h-[44px] rounded-lg touch-manipulation"
           >
-            {isLoading ? (
+            {isVerifying ? (
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
+                <Spinner size="sm" />
                 <span className="hidden sm:inline">Verifying...</span>
                 <span className="sm:hidden">...</span>
               </div>
             ) : (
               <>
-                <span className="hidden sm:inline">🌍 Verify World ID</span>
-                <span className="sm:hidden">🌍 Verify</span>
+                <span className="hidden sm:inline">Verify with World ID</span>
+                <span className="sm:hidden">Verify</span>
               </>
             )}
           </Button>
         )}
-        {isVerified && (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-            <span className="text-xs text-green-400">Verified Human</span>
-          </div>
-        )}
       </div>
 
-      {/* Messages Container */}
-      <div className="h-48 sm:h-64 bg-black/20 rounded-lg p-3 mb-3 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            No messages yet. Be the first to chat!
+      {/* Messages container */}
+      <div className="bg-black/20 border border-white/5 rounded-lg p-3 sm:p-4 h-64 sm:h-80 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <div className="flex items-center gap-2">
+              <Spinner size="md" />
+              <span>Loading messages...</span>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400 text-center">
+            <div>
+              <div className="text-2xl mb-2">💬</div>
+              <p className="text-sm">No messages yet</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {isVerified ? "Be the first to say something!" : "Verify with World ID to join the chat"}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex flex-col gap-1">
+            {messages.map((message) => (
+              <div key={message.id} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-gray-300 font-medium flex items-center gap-1">
-                    {msg.user}
-                    {msg.verified && <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>}
+                  <span className={`font-medium ${message.verified ? 'text-green-400' : 'text-gray-400'}`}>
+                    {message.verified ? '✅' : '👤'} {message.username}
                   </span>
-                  <span className="text-gray-500">{formatTime(msg.timestamp)}</span>
+                  <span className="text-gray-500">
+                    {formatTime(message.created_at)}
+                  </span>
                 </div>
-                <div className="text-white text-sm bg-white/5 rounded-lg px-3 py-2 ml-2">
-                  {msg.message}
+                <div className="text-white text-sm bg-white/5 rounded-lg px-3 py-2 ml-4 break-words">
+                  {message.message}
                 </div>
               </div>
             ))}
@@ -237,30 +218,50 @@ export function ChatRoom() {
         )}
       </div>
 
-      {/* Message Input */}
-      {isVerified ? (
-        <div className="flex gap-2">
-          <Input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
-            className="flex-1 bg-black/20 border-white/10 text-white placeholder-gray-400 text-sm min-h-[44px]"
-            maxLength={200}
-          />
-          <Button 
-            onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 min-h-[44px] rounded-lg text-sm"
-          >
-            <span className="hidden sm:inline">Send</span>
-            <span className="sm:hidden">📤</span>
-          </Button>
-        </div>
-      ) : (
-        <div className="text-center text-gray-400 text-sm py-4 border border-gray-600 rounded-lg">
-                          <div className="mb-2">🌍 Verify your World ID to chat</div>
+      {/* Message input */}
+      <div className="flex gap-2">
+        <Input
+          type="text"
+          placeholder={
+            isVerified 
+              ? "Type your message..." 
+              : "Verify with World ID to chat"
+          }
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          disabled={!isVerified}
+          className="flex-1 bg-black/20 border-white/10 text-white placeholder-gray-400 focus:border-white/30 min-h-[44px] touch-manipulation"
+          maxLength={500}
+        />
+        <Button 
+          onClick={handleSendMessage}
+          disabled={!newMessage.trim() || !isVerified || isSending}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 sm:px-6 min-h-[44px] touch-manipulation"
+        >
+          {isSending ? (
+            <Spinner size="md" />
+          ) : (
+            <>
+              <span className="hidden sm:inline">Send</span>
+              <span className="sm:hidden">📤</span>
+            </>
+          )}
+        </Button>
+      </div>
 
+      {/* Status messages */}
+      {!isConnected && (
+        <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
+          <div className="w-2 h-2 bg-red-400 rounded-full" />
+          Disconnected from chat server
+        </div>
+      )}
+      
+      {isVerified && (
+        <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
+          <div className="w-2 h-2 bg-green-400 rounded-full" />
+          Verified as {userWallet}
         </div>
       )}
     </div>

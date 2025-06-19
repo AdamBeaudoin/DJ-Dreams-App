@@ -21,9 +21,8 @@ export interface ChatMessage {
   message: string
   verified: boolean
   nullifier_hash?: string
-  timestamp: string
-  is_moderated: boolean
+  is_moderated?: boolean
   created_at: string
 }
 
-export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at' | 'timestamp'> 
+export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at'> 
