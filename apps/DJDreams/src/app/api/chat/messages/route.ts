@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    const url = new URL(req.url)
-    const limit = parseInt(url.searchParams.get('limit') || '50')
-    const offset = parseInt(url.searchParams.get('offset') || '0')
+    const { searchParams } = req.nextUrl
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = parseInt(searchParams.get('offset') || '0')
 
     // Fetch messages from database, newest first
     const { data, error } = await supabase
