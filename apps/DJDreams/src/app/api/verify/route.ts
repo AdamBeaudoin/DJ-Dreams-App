@@ -28,12 +28,11 @@ export async function POST(req: NextRequest) {
     if (verifyRes.success) {
       // This is where you should perform backend actions if the verification succeeds
       // Such as, setting a user as "verified" in a database
-      const username = MiniKit.user.username
       return NextResponse.json({ 
         verifyRes, 
         status: 200,
-        message: 'Verification successful',
-        username: username
+        message: 'Verification successful'
+        
       })
     } else {
       // This is where you should handle errors from the World ID /verify endpoint.
