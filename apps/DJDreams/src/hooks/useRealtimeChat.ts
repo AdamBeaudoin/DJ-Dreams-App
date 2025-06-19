@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, type ChatMessage } from '@/lib/supabase'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -6,6 +6,9 @@ export function useRealtimeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
+  const [reconnectAttempts, setReconnectAttempts] = useState(0)
+  const channelRef = useRef<any>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const { toast } = useToast()
 
   // Fetch initial messages
@@ -76,11 +79,31 @@ export function useRealtimeChat() {
     }
   }, [toast])
 
-  // Set up real-time subscription
-  useEffect(() => {
-    fetchMessages()
+  // Reconnection logic
+  const reconnect = useCallback(() => {
+    if (!supabase || reconnectAttempts >= 5) {
+      console.log('Max reconnection attempts reached or Supabase not available')
+      return
+    }
 
-    // Only set up real-time subscription if Supabase is configured
+    console.log(`Attempting to reconnect... (attempt ${reconnectAttempts + 1}/5)`)
+    setReconnectAttempts(prev => prev + 1)
+
+    // Clean up existing channel
+    if (channelRef.current) {
+      channelRef.current.unsubscribe()
+    }
+
+    // Exponential backoff: wait 2^attempt seconds
+    const delay = Math.pow(2, reconnectAttempts) * 1000
+    
+    reconnectTimeoutRef.current = setTimeout(() => {
+      setupRealtimeSubscription()
+    }, delay)
+  }, [reconnectAttempts])
+
+  // Set up real-time subscription
+  const setupRealtimeSubscription = useCallback(() => {
     if (!supabase) {
       console.log('Supabase not configured - real-time chat disabled')
       setIsConnected(false)
@@ -111,13 +134,50 @@ export function useRealtimeChat() {
       )
       .subscribe((status) => {
         console.log('Realtime subscription status:', status)
-        setIsConnected(status === 'SUBSCRIBED')
+        
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true)
+          setReconnectAttempts(0) // Reset reconnection attempts on successful connection
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setIsConnected(false)
+          // Attempt to reconnect after a delay
+          setTimeout(reconnect, 2000)
+        }
       })
 
-    return () => {
-      channel.unsubscribe()
+    channelRef.current = channel
+  }, [reconnect])
+
+  // Handle page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isConnected && supabase) {
+        console.log('Page became visible, attempting to reconnect...')
+        setupRealtimeSubscription()
+      }
     }
-  }, [fetchMessages])
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isConnected, setupRealtimeSubscription])
+
+  // Initial setup
+  useEffect(() => {
+    fetchMessages()
+    setupRealtimeSubscription()
+
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe()
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+    }
+  }, [fetchMessages, setupRealtimeSubscription])
 
   return {
     messages,
