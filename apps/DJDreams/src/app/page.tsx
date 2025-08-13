@@ -25,18 +25,30 @@ export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
   const { toast } = useToast()
   const [isWorldApp, setIsWorldApp] = useState(false)
+  const [isTipping, setIsTipping] = useState(false)
 
   const handleShuffle = () => {
     setShuffleTrigger(prev => prev + 1)
   }
 
   useEffect(() => {
-    try {
-      const installed = MiniKit.isInstalled()
-      setIsWorldApp(!!installed)
-    } catch (e) {
-      setIsWorldApp(false)
+    // Delay MiniKit check to ensure it's properly loaded
+    const checkMiniKit = () => {
+      try {
+        const installed = MiniKit.isInstalled()
+        setIsWorldApp(!!installed)
+        console.log('MiniKit installed:', !!installed)
+      } catch (e) {
+        console.log('MiniKit check failed:', e)
+        setIsWorldApp(false)
+      }
     }
+
+    // Check immediately and after a short delay
+    checkMiniKit()
+    const timeout = setTimeout(checkMiniKit, 1000)
+    
+    return () => clearTimeout(timeout)
   }, [])
 
   const handleTip = async () => {
@@ -44,11 +56,21 @@ export default function HomePage() {
     const tokenAddress = process.env.NEXT_PUBLIC_TIP_WLD_ADDRESS || '0x163f8c2467924be0ae7b5347228cabf260318753'
     const amountWld = Number(process.env.NEXT_PUBLIC_TIP_AMOUNT || '1')
 
-    if (!isWorldApp) return
+    // If not in World App, show helpful modal
+    if (!isWorldApp) {
+      toast({
+        title: 'Open in World App',
+        description: 'To tip with WLD, please open this app in World App.',
+        duration: 4000,
+      })
+      return
+    }
 
     const confirmed = typeof window !== 'undefined' ? window.confirm('Tip 1 WLD via World App?') : false
     if (!confirmed) return
 
+    setIsTipping(true)
+    
     try {
       // 1 WLD with 18 decimals
       const amountWei = BigInt(Math.floor(amountWld * 1e18)).toString()
@@ -67,11 +89,13 @@ export default function HomePage() {
       if ((finalPayload as any).status === 'error') {
         toast({ title: 'Tip failed', description: 'Transaction was cancelled or failed.', variant: 'destructive' })
       } else {
-        toast({ title: 'Thanks! 💸', description: 'Tip submitted in World App.' })
+        toast({ title: 'Thanks! 💸', description: 'Tip submitted successfully.' })
       }
     } catch (err) {
+      console.error('Tip error:', err)
       toast({ title: 'Tip failed', description: 'Unexpected error. Please try again.', variant: 'destructive' })
-      console.error('Tip error', err)
+    } finally {
+      setIsTipping(false)
     }
   }
 
@@ -110,16 +134,14 @@ export default function HomePage() {
             <div className="px-4 sm:px-6 py-3 sm:py-2 bg-white/20 text-white rounded-lg text-sm sm:text-base font-medium min-h-[44px] flex items-center border-2 border-white/30">
               🔴 Live
             </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={handleTip}
-                disabled={!isWorldApp}
-                title={isWorldApp ? 'Tip 1 WLD' : 'Open in World App to tip'}
-                className={`px-4 sm:px-6 py-3 sm:py-2 rounded-lg transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation ${isWorldApp ? 'bg-white/10 text-white hover:bg-white/20 active:bg-white/30' : 'bg-gray-700/50 text-gray-300 cursor-not-allowed'}`}
-              >
-                💸 Tip
-              </button>
-            </div>
+            <button 
+              onClick={handleTip}
+              disabled={isTipping}
+              title={isWorldApp ? 'Tip 1 WLD' : 'Open in World App to tip'}
+              className={`px-4 sm:px-6 py-3 sm:py-2 rounded-lg transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation ${isWorldApp && !isTipping ? 'bg-white/10 text-white hover:bg-white/20 active:bg-white/30' : 'bg-gray-700/50 text-gray-300 cursor-not-allowed'}`}
+            >
+              {isTipping ? '⏳ Tipping...' : '💸 Tip'}
+            </button>
             <button 
               onClick={handleShuffle}
               className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
