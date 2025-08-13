@@ -60,6 +60,14 @@ const DJ_SETS = [
   {
     url: 'https://www.youtube.com/watch?v=5c9QuIMOcwc',
     title: 'Flat White'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=7Ih2hbcZZoM',
+    title: 'Dekmantel - Shanti Celeste & Peach'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=pOTkCgkxqyg',
+    title: 'Nirvana - MTV Unplugged in New York'
   }
 ]
 
