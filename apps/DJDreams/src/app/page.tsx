@@ -4,12 +4,71 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
+import { useToast } from '@/components/ui/use-toast'
+import { MiniKit } from '@worldcoin/minikit-js'
+
+// Minimal ERC-20 ABI for transfer
+const ERC20_ABI = [
+  {
+    "inputs": [
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "transfer",
+    "outputs": [ { "internalType": "bool", "name": "", "type": "bool" } ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
 
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
+  const { toast } = useToast()
 
   const handleShuffle = () => {
     setShuffleTrigger(prev => prev + 1)
+  }
+
+  const handleTip = async () => {
+    const recipient = process.env.NEXT_PUBLIC_TIP_RECIPIENT_ADDRESS || '0x693d8dced3be29222691123656daea9f18e95f4b'
+    const tokenAddress = process.env.NEXT_PUBLIC_TIP_WLD_ADDRESS || '0x163f8c2467924be0ae7b5347228cabf260318753'
+    const amountWld = Number(process.env.NEXT_PUBLIC_TIP_AMOUNT || '1')
+
+    if (!MiniKit.isInstalled()) {
+      toast({
+        title: 'Open in World App',
+        description: 'To tip, please open this app in World App.',
+      })
+      return
+    }
+
+    const confirmed = typeof window !== 'undefined' ? window.confirm('Tip 1 WLD via World App?') : false
+    if (!confirmed) return
+
+    try {
+      // 1 WLD with 18 decimals
+      const amountWei = BigInt(Math.floor(amountWld * 1e18)).toString()
+
+      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+        transaction: [
+          {
+            address: tokenAddress,
+            abi: ERC20_ABI as any,
+            functionName: 'transfer',
+            args: [recipient, amountWei],
+          },
+        ],
+      })
+
+      if ((finalPayload as any).status === 'error') {
+        toast({ title: 'Tip failed', description: 'Transaction was cancelled or failed.', variant: 'destructive' })
+      } else {
+        toast({ title: 'Thanks! 💸', description: 'Tip submitted in World App.' })
+      }
+    } catch (err) {
+      toast({ title: 'Tip failed', description: 'Unexpected error. Please try again.', variant: 'destructive' })
+      console.error('Tip error', err)
+    }
   }
 
   return (
@@ -47,6 +106,12 @@ export default function HomePage() {
             <div className="px-4 sm:px-6 py-3 sm:py-2 bg-white/20 text-white rounded-lg text-sm sm:text-base font-medium min-h-[44px] flex items-center border-2 border-white/30">
               🔴 Live
             </div>
+            <button 
+              onClick={handleTip}
+              className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
+            >
+              💸 Tip
+            </button>
             <button 
               onClick={handleShuffle}
               className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
