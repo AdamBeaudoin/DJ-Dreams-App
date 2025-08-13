@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
@@ -24,23 +24,27 @@ const ERC20_ABI = [
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
   const { toast } = useToast()
+  const [isWorldApp, setIsWorldApp] = useState(false)
 
   const handleShuffle = () => {
     setShuffleTrigger(prev => prev + 1)
   }
+
+  useEffect(() => {
+    try {
+      const installed = MiniKit.isInstalled()
+      setIsWorldApp(!!installed)
+    } catch (e) {
+      setIsWorldApp(false)
+    }
+  }, [])
 
   const handleTip = async () => {
     const recipient = process.env.NEXT_PUBLIC_TIP_RECIPIENT_ADDRESS || '0x693d8dced3be29222691123656daea9f18e95f4b'
     const tokenAddress = process.env.NEXT_PUBLIC_TIP_WLD_ADDRESS || '0x163f8c2467924be0ae7b5347228cabf260318753'
     const amountWld = Number(process.env.NEXT_PUBLIC_TIP_AMOUNT || '1')
 
-    if (!MiniKit.isInstalled()) {
-      toast({
-        title: 'Open in World App',
-        description: 'To tip, please open this app in World App.',
-      })
-      return
-    }
+    if (!isWorldApp) return
 
     const confirmed = typeof window !== 'undefined' ? window.confirm('Tip 1 WLD via World App?') : false
     if (!confirmed) return
@@ -106,12 +110,16 @@ export default function HomePage() {
             <div className="px-4 sm:px-6 py-3 sm:py-2 bg-white/20 text-white rounded-lg text-sm sm:text-base font-medium min-h-[44px] flex items-center border-2 border-white/30">
               🔴 Live
             </div>
-            <button 
-              onClick={handleTip}
-              className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
-            >
-              💸 Tip
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleTip}
+                disabled={!isWorldApp}
+                title={isWorldApp ? 'Tip 1 WLD' : 'Open in World App to tip'}
+                className={`px-4 sm:px-6 py-3 sm:py-2 rounded-lg transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation ${isWorldApp ? 'bg-white/10 text-white hover:bg-white/20 active:bg-white/30' : 'bg-gray-700/50 text-gray-300 cursor-not-allowed'}`}
+              >
+                💸 Tip
+              </button>
+            </div>
             <button 
               onClick={handleShuffle}
               className="px-4 sm:px-6 py-3 sm:py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/30 transition-colors text-sm sm:text-base font-medium min-h-[44px] flex items-center gap-2 touch-manipulation"
