@@ -61,6 +61,15 @@
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    height: 100%;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+  }
+  body {
+    height: 100%;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    overflow-x: hidden;
   }
   
   /* Prevent zoom on input focus on iOS */

@@ -76,7 +76,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-[100dvh] bg-black overflow-hidden">
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-5xl">
         <header className="text-center mb-6 sm:mb-8">
           <div className="mb-3 sm:mb-4 flex justify-center">
