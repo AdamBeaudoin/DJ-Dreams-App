@@ -68,6 +68,10 @@ const DJ_SETS = [
   {
     url: 'https://www.youtube.com/watch?v=pOTkCgkxqyg',
     title: 'Nirvana - MTV Unplugged in New York'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=YIFwo6lKDhI',
+    title: 'Job Jobse: Streaming from Isolation'
   }
 ]
 
