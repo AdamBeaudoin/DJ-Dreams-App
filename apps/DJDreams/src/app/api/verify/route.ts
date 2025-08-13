@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyCloudProof, IVerifyResponse, ISuccessResult } from '@worldcoin/minikit-js'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 interface IRequestPayload {
   payload: ISuccessResult
@@ -25,8 +26,20 @@ export async function POST(req: NextRequest) {
     const verifyRes = (await verifyCloudProof(payload, app_id, action, signal)) as IVerifyResponse
 
     if (verifyRes.success) {
-      // This is where you should perform backend actions if the verification succeeds
-      // Such as, setting a user as "verified" in a database
+      // Persist verification server-side for enforcement
+      try {
+        if (!supabaseAdmin) {
+          console.error('Supabase admin not configured')
+        } else {
+          const { nullifier_hash } = payload
+          const username = (payload as any)?.username ?? null
+          await supabaseAdmin
+            .from('verified_users')
+            .upsert({ nullifier_hash, username }, { onConflict: 'nullifier_hash' })
+        }
+      } catch (e) {
+        console.error('Failed to persist verification:', e)
+      }
       return NextResponse.json({ 
         verifyRes, 
         message: 'Verification successful' 
