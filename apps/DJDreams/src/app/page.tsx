@@ -5,21 +5,7 @@ import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
 import { useToast } from '@/components/ui/use-toast'
-import { MiniKit } from '@worldcoin/minikit-js'
-
-// Minimal ERC-20 ABI for transfer
-const ERC20_ABI = [
-  {
-    "inputs": [
-      { "internalType": "address", "name": "to", "type": "address" },
-      { "internalType": "uint256", "name": "value", "type": "uint256" }
-    ],
-    "name": "transfer",
-    "outputs": [ { "internalType": "bool", "name": "", "type": "bool" } ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-]
+import { MiniKit, PayCommandInput } from '@worldcoin/minikit-js'
 
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
@@ -32,31 +18,27 @@ export default function HomePage() {
 
   const handleTip = async () => {
     const recipient = process.env.NEXT_PUBLIC_TIP_RECIPIENT_ADDRESS || '0x693d8dced3be29222691123656daea9f18e95f4b'
-    const tokenAddress = process.env.NEXT_PUBLIC_TIP_WLD_ADDRESS || '0x163f8c2467924be0ae7b5347228cabf260318753'
     const amountWld = Number(process.env.NEXT_PUBLIC_TIP_AMOUNT || '1')
-
-    const confirmed = typeof window !== 'undefined' ? window.confirm('Tip 1 WLD via World App?') : false
-    if (!confirmed) return
 
     setIsTipping(true)
     
     try {
-      // 1 WLD with 18 decimals
-      const amountWei = BigInt(Math.floor(amountWld * 1e18)).toString()
-
-      const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
-        transaction: [
+      const payInput: PayCommandInput = {
+        to: recipient,
+        tokens: [
           {
-            address: tokenAddress,
-            abi: ERC20_ABI as any,
-            functionName: 'transfer',
-            args: [recipient, amountWei],
+            symbol: 'WLD' as any,
+            token_amount: amountWld.toString(),
           },
         ],
-      })
+        description: 'Tip for DJ Dreams',
+        reference: `tip-${Date.now()}`,
+      }
 
-      if ((finalPayload as any).status === 'error') {
-        toast({ title: 'Tip cancelled', description: 'Transaction was cancelled.', variant: 'destructive' })
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payInput)
+
+      if (finalPayload.status === 'error') {
+        toast({ title: 'Tip cancelled', description: 'Payment was cancelled.', variant: 'destructive' })
       } else {
         toast({ title: 'Thanks! 💸', description: 'Your tip was sent successfully!' })
       }
