@@ -28,7 +28,7 @@ export default function HomePage() {
         tokens: [
           {
             symbol: 'WLD' as any,
-            token_amount: amountWld.toString(),
+            token_amount: (amountWld * 1e18).toString(), // Convert to wei (18 decimals)
           },
         ],
         description: 'Tip for DJ Dreams',
