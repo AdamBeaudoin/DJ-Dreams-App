@@ -56,6 +56,10 @@ const DJ_SETS = [
   {
     url: 'https://www.youtube.com/watch?v=-w3xYI64LSo',
     title: 'Job Jobse | Boiler Room'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=5c9QuIMOcwc',
+    title: 'Flat White'
   }
 ]
 
