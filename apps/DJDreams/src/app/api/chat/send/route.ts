@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, type ChatMessageInsert } from '@/lib/supabase'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { moderateMessage, validateMessage } from '@/lib/moderation'
 
 // Force dynamic rendering for this API route
@@ -19,8 +18,9 @@ export async function POST(req: NextRequest) {
     // Return early if Supabase is not configured
     if (!supabase) {
       return NextResponse.json({ 
-        error: 'Chat system not configured - Supabase required'
-      }, { status: 503 })
+        error: 'Chat system not configured - Supabase required',
+        status: 503 
+      })
     }
 
     const { message, userId, username, nullifierHash, verified }: SendMessageRequest = await req.json()
@@ -29,32 +29,17 @@ export async function POST(req: NextRequest) {
     const validation = validateMessage(message)
     if (!validation.isValid) {
       return NextResponse.json({ 
-        error: validation.error
-      }, { status: 400 })
+        error: validation.error,
+        status: 400 
+      })
     }
 
-    // Enforce server-side verification: ensure nullifier_hash exists in verified_users
-    if (!supabaseAdmin) {
-      console.warn('Supabase admin not configured; falling back to client-provided verified flag')
-      if (!verified) {
-        return NextResponse.json({ error: 'Must be verified to send messages' }, { status: 403 })
-      }
-    } else {
-      if (!nullifierHash) {
-        return NextResponse.json({ error: 'Missing verification identifier' }, { status: 400 })
-      }
-      const { data: verifiedRow, error: verifyErr } = await supabaseAdmin
-        .from('verified_users')
-        .select('nullifier_hash')
-        .eq('nullifier_hash', nullifierHash)
-        .maybeSingle()
-      if (verifyErr) {
-        console.error('Verification lookup failed:', verifyErr)
-        return NextResponse.json({ error: 'Verification check failed' }, { status: 500 })
-      }
-      if (!verifiedRow) {
-        return NextResponse.json({ error: 'User not verified' }, { status: 403 })
-      }
+    // Only allow verified users to send messages
+    if (!verified) {
+      return NextResponse.json({ 
+        error: 'Must be verified to send messages',
+        status: 403 
+      })
     }
 
     // Moderate the message
@@ -90,19 +75,22 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('Database insert error:', error)
       return NextResponse.json({ 
-        error: 'Failed to save message'
-      }, { status: 500 })
+        error: 'Failed to save message',
+        status: 500 
+      })
     }
 
     return NextResponse.json({ 
       message: data,
-      moderated: !moderation.isClean
-    }, { status: 200 })
+      moderated: !moderation.isClean,
+      status: 200 
+    })
 
   } catch (error) {
     console.error('Send message error:', error)
     return NextResponse.json({ 
-      error: 'Internal server error'
-    }, { status: 500 })
+      error: 'Internal server error',
+      status: 500 
+    })
   }
 } 

@@ -38,13 +38,11 @@ export function useRealtimeChat() {
       const response = await fetch('/api/chat/messages?limit=50')
       const data = await response.json()
       
-      // Accept either HTTP status code success or legacy JSON { status: 200 }
-      const isOk = response.ok || data.status === 200
-      if (isOk && Array.isArray(data.messages)) {
+      if (data.status === 200) {
         setMessages(data.messages || [])
         console.log(`[FETCH] Got ${data.messages?.length || 0} messages`)
       } else {
-        console.error('Failed to fetch messages:', data.error || 'Unexpected response shape')
+        console.error('Failed to fetch messages:', data.error)
       }
     } catch (error) {
       console.error('Error fetching messages:', error)

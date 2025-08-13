@@ -336,7 +336,7 @@ export function ChatRoom() {
           onKeyPress={handleKeyPress}
           disabled={!isVerified}
           className="flex-1 bg-black/20 border-white/10 text-white placeholder-gray-400 focus:border-white/30 min-h-[44px] touch-manipulation"
-          maxLength={200}
+          maxLength={500}
         />
         <Button 
           onClick={handleSendMessage}

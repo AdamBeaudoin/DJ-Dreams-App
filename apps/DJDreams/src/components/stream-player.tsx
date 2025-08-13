@@ -68,10 +68,6 @@ const DJ_SETS = [
   {
     url: 'https://www.youtube.com/watch?v=pOTkCgkxqyg',
     title: 'Nirvana - MTV Unplugged in New York'
-  },
-  {
-    url: 'https://www.youtube.com/watch?v=YIFwo6lKDhI',
-    title: 'Job Jobse: Streaming from Isolation'
   }
 ]
 
@@ -203,6 +199,7 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
             playerVars: {
               autoplay: 1,
               rel: 0,
+              showinfo: 0,
               modestbranding: 1
             }
           }}

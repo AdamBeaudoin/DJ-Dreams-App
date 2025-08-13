@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyCloudProof, IVerifyResponse, ISuccessResult } from '@worldcoin/minikit-js'
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 interface IRequestPayload {
   payload: ISuccessResult
@@ -18,32 +17,22 @@ export async function POST(req: NextRequest) {
     if (!app_id) {
       console.error('World ID verification failed: App ID not configured')
       return NextResponse.json({ 
-        error: 'App ID not configured'
-      }, { status: 500 })
+        error: 'App ID not configured',
+        status: 500 
+      })
     }
     
     // Verify the proof using World ID cloud verification
     const verifyRes = (await verifyCloudProof(payload, app_id, action, signal)) as IVerifyResponse
 
     if (verifyRes.success) {
-      // Persist verification server-side for enforcement
-      try {
-        if (!supabaseAdmin) {
-          console.error('Supabase admin not configured')
-        } else {
-          const { nullifier_hash } = payload
-          const username = (payload as any)?.username ?? null
-          await supabaseAdmin
-            .from('verified_users')
-            .upsert({ nullifier_hash, username }, { onConflict: 'nullifier_hash' })
-        }
-      } catch (e) {
-        console.error('Failed to persist verification:', e)
-      }
+      // This is where you should perform backend actions if the verification succeeds
+      // Such as, setting a user as "verified" in a database
       return NextResponse.json({ 
         verifyRes, 
+        status: 200,
         message: 'Verification successful' 
-      }, { status: 200 })
+      })
     } else {
       // This is where you should handle errors from the World ID /verify endpoint.
       // Usually these errors are due to a user having already verified.
@@ -51,16 +40,18 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({ 
         verifyRes, 
+        status: 400,
         message: 'Verification failed',
         details: verifyRes
-      }, { status: 400 })
+      })
     }
   } catch (error) {
     console.error('World ID verification error:', error instanceof Error ? error.message : 'Unknown error')
     
     return NextResponse.json({ 
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+      details: error instanceof Error ? error.message : 'Unknown error',
+      status: 500 
+    })
   }
 } 
