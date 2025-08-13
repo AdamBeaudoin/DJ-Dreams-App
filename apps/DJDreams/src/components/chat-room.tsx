@@ -111,24 +111,46 @@ export function ChatRoom() {
       
       if (verifyResponseJson.status === 200) {
         const successPayload = finalPayload as ISuccessResult
-        
+
         // Try to get username without prompting (in case wallet is already connected)
         let worldIdUsername: string | null = await fetchWorldIdUsername()
-        
+
+        // If no username is available yet, do a one-time wallet auth now to fetch it
+        if (!worldIdUsername) {
+          try {
+            const walletAuthPayload: WalletAuthInput = {
+              nonce: Math.random().toString(36).substring(2),
+              requestId: Math.random().toString(36).substring(2),
+              expirationTime: new Date(Date.now() + 5 * 60 * 1000),
+              notBefore: new Date(),
+              statement: "Connect your wallet to display your World ID username (no transactions will be made)",
+            }
+
+            const walletAuthResult = await MiniKit.commandsAsync.walletAuth(walletAuthPayload)
+
+            if (walletAuthResult.finalPayload.status === 'success') {
+              // Try fetching again after wallet auth
+              worldIdUsername = await fetchWorldIdUsername()
+            }
+          } catch (err) {
+            console.error('Inline wallet auth failed during verification:', err)
+          }
+        }
+
         // Use World ID username if available, otherwise fallback to hash-based identifier
         const displayUsername = worldIdUsername || `Human #${successPayload.nullifier_hash.slice(-6)}`
-        
+
         setIsVerified(true)
         setUserWallet(displayUsername)
         setNullifierHash(successPayload.nullifier_hash)
         setWorldIdUsername(worldIdUsername || '')
-        
+
         toast({
           title: "Verified! ✅",
           description: worldIdUsername 
             ? `Welcome ${worldIdUsername}! You can now chat with other verified humans`
-            : "You can now chat with other verified humans. Want to show your World ID username? Connect your wallet in settings.",
-          duration: worldIdUsername ? 3000 : 5000, // Longer duration for the username hint
+            : "You can now chat with other verified humans. You can show your World ID username anytime from the button below.",
+          duration: worldIdUsername ? 3000 : 5000,
         })
       } else {
         console.log('Backend verification failed:', verifyResponseJson)
