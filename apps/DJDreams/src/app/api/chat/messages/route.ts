@@ -10,9 +10,8 @@ export async function GET(req: NextRequest) {
     if (!supabase) {
       return NextResponse.json({ 
         messages: [],
-        status: 200,
         message: 'Chat system not configured' 
-      })
+      }, { status: 200 })
     }
 
     const { searchParams } = req.nextUrl
@@ -29,24 +28,21 @@ export async function GET(req: NextRequest) {
     if (error) {
       console.error('Database fetch error:', error)
       return NextResponse.json({ 
-        error: 'Failed to fetch messages',
-        status: 500 
-      })
+        error: 'Failed to fetch messages'
+      }, { status: 500 })
     }
 
     // Reverse to show oldest first in UI
     const messages = data.reverse()
 
     return NextResponse.json({ 
-      messages,
-      status: 200 
-    })
+      messages
+    }, { status: 200 })
 
   } catch (error) {
     console.error('Fetch messages error:', error)
     return NextResponse.json({ 
-      error: 'Internal server error',
-      status: 500 
-    })
+      error: 'Internal server error'
+    }, { status: 500 })
   }
 } 

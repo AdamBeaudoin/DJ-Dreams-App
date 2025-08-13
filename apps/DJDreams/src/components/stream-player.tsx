@@ -203,7 +203,6 @@ export function StreamPlayer({ shuffleTrigger = 0 }: StreamPlayerProps) {
             playerVars: {
               autoplay: 1,
               rel: 0,
-              showinfo: 0,
               modestbranding: 1
             }
           }}

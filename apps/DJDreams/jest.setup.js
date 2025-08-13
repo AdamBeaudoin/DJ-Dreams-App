@@ -28,6 +28,28 @@ jest.mock('react-player/youtube', () => ({
   },
 }))
 
+// Mock bad-words (to avoid ESM transform issues in tests)
+jest.mock('bad-words', () => {
+  class MockFilter {
+    constructor() {
+      this.custom = []
+    }
+    addWords(...words) {
+      this.custom.push(...words.flat())
+    }
+    // Very small profanity list for tests
+    isProfane(text) {
+      const list = ['damn', 'spam', 'fuck', 'shit', 'pussy', 'dick', 'cock', 'ass', 'bitch', 'whore', 'slut', 'nigger', 'fagot', ...this.custom]
+      const pattern = new RegExp(`\\b(${list.map(w => w.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')).join('|')})\\b`, 'i')
+      return pattern.test(text)
+    }
+    clean(text) {
+      return text.replace(/damn|spam/gi, '****')
+    }
+  }
+  return { Filter: MockFilter }
+})
+
 // Mock MiniKit
 jest.mock('@worldcoin/minikit-js', () => ({
   MiniKit: {
