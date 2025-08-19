@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { StreamPlayer } from '@/components/stream-player'
 import { ChatRoom } from '@/components/chat-room'
 import { useToast } from '@/components/ui/use-toast'
-import { MiniKit, PayCommandInput } from '@worldcoin/minikit-js'
+import { MiniKit, PayCommandInput, Tokens, tokenToDecimals, Network } from '@worldcoin/minikit-js'
 
 export default function HomePage() {
   const [shuffleTrigger, setShuffleTrigger] = useState(0)
@@ -23,16 +23,32 @@ export default function HomePage() {
     setIsTipping(true)
     
     try {
+      if (!MiniKit.isInstalled()) {
+        toast({ title: 'Open in World App', description: 'Payments are available in World App.', variant: 'destructive' })
+        return
+      }
+
+      const initRes = await fetch('/api/initiate-payment', { method: 'POST', cache: 'no-store' })
+      const { id: reference } = await initRes.json()
+
       const payInput: PayCommandInput = {
+        reference,
         to: recipient,
         tokens: [
           {
-            symbol: 'WLD' as any,
-            token_amount: (amountWld * 1e18).toString(), // Convert to wei (18 decimals)
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(amountWld, Tokens.WLD).toString(),
           },
         ],
         description: 'Tip for DJ Dreams',
-        reference: `tip-${Date.now()}`,
+        network: Network.WorldChain,
+      }
+
+      console.log('MiniKit installed?', MiniKit.isInstalled())
+      console.log('pay available?', !!MiniKit.commandsAsync?.pay)
+      if (!MiniKit.isInstalled() || !MiniKit.commandsAsync?.pay) {
+        toast({ title: 'Open in World App', description: 'Please open in the latest World App to pay.', variant: 'destructive' })
+        return
       }
 
       const { finalPayload } = await MiniKit.commandsAsync.pay(payInput)
@@ -40,7 +56,17 @@ export default function HomePage() {
       if (finalPayload.status === 'error') {
         toast({ title: 'Tip cancelled', description: 'Payment was cancelled.', variant: 'destructive' })
       } else {
-        toast({ title: 'Thanks! 💸', description: 'Your tip was sent successfully!' })
+        const confirmRes = await fetch('/api/confirm-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: finalPayload }),
+        })
+        const confirmJson = await confirmRes.json()
+        if (confirmJson.success) {
+          toast({ title: 'Thanks! 💸', description: 'Your tip was sent successfully!' })
+        } else {
+          toast({ title: 'Tip pending', description: 'We are waiting for confirmation on-chain.' })
+        }
       }
     } catch (err) {
       console.error('Tip error:', err)

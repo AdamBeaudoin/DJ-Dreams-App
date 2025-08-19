@@ -8,7 +8,12 @@ export function MiniKitProvider({ children }: { children: ReactNode }) {
     // Only install MiniKit if we're in a browser environment
     if (typeof window !== 'undefined') {
       try {
-        MiniKit.install()
+        const appId = process.env.NEXT_PUBLIC_APP_ID as `app_${string}` | undefined
+        if (appId) {
+          MiniKit.install(appId)
+        } else {
+          MiniKit.install()
+        }
       } catch (error) {
         console.log('MiniKit installation skipped:', error)
       }
