@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+if [ "${ALLOW_MAIN_PUSH:-}" = "1" ]; then
+  exit 0
+fi
+
+branch_name="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+
+if [ "$branch_name" = "main" ]; then
+  echo "Direct pushes to 'main' are blocked in this clone."
+  echo "Create a feature branch, open a PR, and merge through GitHub."
+  echo "If this is intentional, run once with: ALLOW_MAIN_PUSH=1 git push"
+  exit 1
+fi
