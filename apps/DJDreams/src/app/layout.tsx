@@ -5,7 +5,6 @@ import { Toaster } from '@/components/ui/toaster'
 import { MiniKitProvider } from '@/components/minikit-provider'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import MobileDebug from '@/components/MobileDebug'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -51,9 +50,6 @@ export default function RootLayout({
         <MiniKitProvider>
           {children}
         </MiniKitProvider>
-        {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1' ? (
-          <MobileDebug />
-        ) : null}
         <Toaster />
         <Analytics />
         <SpeedInsights />

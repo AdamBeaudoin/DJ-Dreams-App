@@ -14,15 +14,5 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
     })
   : null
 
-export interface ChatMessage {
-  id: string
-  user_id: string
-  username: string
-  message: string
-  verified: boolean
-  nullifier_hash?: string
-  is_moderated?: boolean
-  created_at: string
-}
-
-export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at'> 
+// Re-export from domain for backward compatibility
+export type { ChatMessage, ChatMessageInsert } from './domains/chat/types' 

@@ -1,174 +1,115 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase, type ChatMessage } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
+import type { ChatMessage } from '@/lib/domains/chat/types'
 import { useToast } from '@/components/ui/use-toast'
 
-// Check if we're in development environment
 const isDevelopment = process.env.NODE_ENV === 'development'
 const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+
+// In dev (polling is primary), poll frequently. In prod (real-time handles it), poll rarely as fallback.
+const MIN_FETCH_INTERVAL = isDevelopment || isLocalhost ? 10_000 : 5 * 60_000
 
 export function useRealtimeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
-  const [lastFetchTime, setLastFetchTime] = useState(0)
-  const channelRef = useRef<any>(null)
+  const channelRef = useRef<ReturnType<NonNullable<typeof supabase>['channel']> | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const lastFetchTimeRef = useRef(0)
+  const donorUserIdsRef = useRef<Set<string>>(new Set())
   const { toast } = useToast()
 
-  // EMERGENCY BRAKE: Maximum reconnection attempts (reduced from infinite to 3)
   const MAX_RECONNECT_ATTEMPTS = 3
-  // EMERGENCY BRAKE: Minimum time between API calls (5 minutes for local dev)
-  const MIN_FETCH_INTERVAL = isDevelopment || isLocalhost ? 5 * 60 * 1000 : 30 * 1000 // 5 minutes local, 30 seconds production
 
-  // Fetch initial messages with rate limiting
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (force = false) => {
     const now = Date.now()
-    
-    // EMERGENCY BRAKE: Prevent excessive API calls
-    if (now - lastFetchTime < MIN_FETCH_INTERVAL) {
-      console.log(`[RATE LIMIT] Skipping fetch - too soon. Wait ${Math.ceil((MIN_FETCH_INTERVAL - (now - lastFetchTime)) / 1000)}s`)
+
+    if (!force && now - lastFetchTimeRef.current < MIN_FETCH_INTERVAL) {
       return
     }
 
     try {
-      console.log('[FETCH] Getting messages from API...')
-      setLastFetchTime(now)
-      
+      lastFetchTimeRef.current = now
       const response = await fetch('/api/chat/messages?limit=50')
       const data = await response.json()
-      
-      if (data.status === 200) {
-        setMessages(data.messages || [])
-        console.log(`[FETCH] Got ${data.messages?.length || 0} messages`)
-      } else {
-        console.error('Failed to fetch messages:', data.error)
+
+      if (response.ok) {
+        const msgs: ChatMessage[] = data.data?.messages || []
+        // Update donor set from server-enriched messages
+        const newDonors = new Set<string>()
+        msgs.forEach(m => { if (m.is_donor) newDonors.add(m.user_id) })
+        donorUserIdsRef.current = newDonors
+        setMessages(msgs)
       }
     } catch (error) {
       console.error('Error fetching messages:', error)
     } finally {
       setIsLoading(false)
     }
-  }, [lastFetchTime])
+  }, [])
 
-  // Send a message
   const sendMessage = useCallback(async (
     message: string,
-    userId: string,
+    _nullifier: string,
     username: string,
-    nullifierHash?: string,
-    verified: boolean = true
+    is_boosted?: boolean
   ) => {
-    try {
-      const response = await fetch('/api/chat/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message,
-          userId,
-          username,
-          nullifierHash,
-          verified
-        }),
-      })
+    const response = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, ...(is_boosted && { is_boosted: true }) }),
+    })
 
-      const data = await response.json()
-      
-      if (data.status !== 200) {
-        throw new Error(data.error || 'Failed to send message')
-      }
+    const data = await response.json()
 
-      // Show moderation notice if message was filtered
-      if (data.moderated) {
-        toast({
-          title: "Message Moderated",
-          description: "Your message contained inappropriate content and was filtered",
-          variant: "destructive",
-        })
-      }
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to send message')
+    }
 
-      // IMMEDIATE REFRESH: Fetch messages after sending (but respect rate limit)
-      setTimeout(() => fetchMessages(), 1000)
-
-      return data.message
-    } catch (error) {
-      console.error('Error sending message:', error)
+    if (data.data?.moderated) {
       toast({
-        title: "Send Failed",
-        description: error instanceof Error ? error.message : "Failed to send message",
+        title: "Message Moderated",
+        description: "Your message contained inappropriate content and was filtered",
         variant: "destructive",
       })
-      throw error
-    }
-  }, [toast, fetchMessages])
-
-  // EMERGENCY BRAKE: Severely limited reconnection logic
-  const reconnect = useCallback(() => {
-    if (!supabase || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.log(`[RECONNECT] Stopped - Max attempts reached (${MAX_RECONNECT_ATTEMPTS}) or Supabase not available`)
-      setIsConnected(false)
-      return
     }
 
-    console.log(`[RECONNECT] Attempting... (${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
-    setReconnectAttempts(prev => prev + 1)
-
-    // Clean up existing channel
-    if (channelRef.current) {
-      channelRef.current.unsubscribe()
+    // Optimistic local insert — append the server-returned message immediately
+    if (data.data?.message) {
+      setMessages(prev => {
+        if (prev.some(msg => msg.id === data.data.message.id)) return prev
+        return [...prev, data.data.message]
+      })
     }
 
-    // EMERGENCY BRAKE: Much longer backoff delays (30s, 60s, 120s)
-    const delay = Math.min(30000 * Math.pow(2, reconnectAttempts), 120000) // Max 2 minutes
-    console.log(`[RECONNECT] Waiting ${delay/1000}s before retry...`)
-    
-    reconnectTimeoutRef.current = setTimeout(() => {
-      setupRealtimeSubscription()
-      // DO NOT CALL fetchMessages() here - this was causing the spam!
-    }, delay)
-  }, [reconnectAttempts])
+    return data.data?.message
+  }, [toast])
 
-  // Set up real-time subscription with emergency brakes
   const setupRealtimeSubscription = useCallback(() => {
-    // EMERGENCY BRAKE: Disable real-time in local development
-    if (isDevelopment || isLocalhost) {
-      console.log('[REALTIME] Disabled in development - using manual refresh only')
+    if (isDevelopment || isLocalhost || !supabase) {
       setIsConnected(false)
       return
     }
 
-    if (!supabase) {
-      console.log('[REALTIME] Supabase not configured - chat disabled')
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
       setIsConnected(false)
       return
     }
 
-    // EMERGENCY BRAKE: Don't try if we've exceeded attempts
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.log('[REALTIME] Max reconnect attempts exceeded - giving up')
-      setIsConnected(false)
-      return
-    }
-
-    console.log('[REALTIME] Setting up subscription...')
-
-    // Subscribe to new messages
     const channel = supabase
       .channel('messages')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'messages' 
-        }, 
+      .on('postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages'
+        },
         (payload) => {
-          console.log('[REALTIME] New message received:', payload.new)
           const newMessage = payload.new as ChatMessage
-          
+          newMessage.is_donor = donorUserIdsRef.current.has(newMessage.user_id)
+
           setMessages(prev => {
-            // Avoid duplicates
             if (prev.some(msg => msg.id === newMessage.id)) {
               return prev
             }
@@ -177,81 +118,71 @@ export function useRealtimeChat() {
         }
       )
       .subscribe((status) => {
-        console.log('[REALTIME] Subscription status:', status)
-        
         if (status === 'SUBSCRIBED') {
           setIsConnected(true)
-          setReconnectAttempts(0) // Reset on successful connection
-          console.log('[REALTIME] ✅ Connected successfully')
+          reconnectAttemptsRef.current = 0
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           setIsConnected(false)
-          console.log('[REALTIME] ❌ Connection failed, will attempt reconnect...')
-          
-          // EMERGENCY BRAKE: Only reconnect if we haven't exceeded attempts
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            setTimeout(reconnect, 5000) // 5 second delay before reconnect
-          } else {
-            console.log('[REALTIME] ⛔ Max reconnect attempts reached - stopping')
+          if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttemptsRef.current += 1
+            const delay = Math.min(30000 * Math.pow(2, reconnectAttemptsRef.current), 120000)
+            reconnectTimeoutRef.current = setTimeout(() => {
+              setupRealtimeSubscription()
+            }, delay)
           }
         }
       })
 
     channelRef.current = channel
-  }, [reconnect, reconnectAttempts])
+  }, [])
 
-  // Handle page visibility changes (with rate limiting)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isConnected && supabase) {
-        const now = Date.now()
-        // EMERGENCY BRAKE: Don't reconnect too frequently
-        if (now - lastFetchTime > MIN_FETCH_INTERVAL && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          console.log('[VISIBILITY] Page visible - attempting reconnect...')
+      if (document.visibilityState === 'visible') {
+        // Always refetch on visibility change to catch missed messages
+        fetchMessages(true)
+
+        if (!isConnected && supabase && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           setupRealtimeSubscription()
-        } else {
-          console.log('[VISIBILITY] Skipping reconnect - too frequent or max attempts reached')
         }
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [isConnected, setupRealtimeSubscription, lastFetchTime, reconnectAttempts])
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [isConnected, setupRealtimeSubscription, fetchMessages])
 
-  // EMERGENCY BRAKE: Only fetch once on initial load
   useEffect(() => {
-    console.log('[INIT] Initializing chat...')
-    console.log(`[INIT] Environment: ${isDevelopment ? 'development' : 'production'}, Localhost: ${isLocalhost}`)
-    
-    // Initial message fetch
-    fetchMessages()
-    
-    // Only setup real-time in production
+    fetchMessages(true)
+
     if (!isDevelopment && !isLocalhost) {
       setupRealtimeSubscription()
-    } else {
-      console.log('[INIT] Real-time disabled - use manual refresh in development')
+    }
+
+    // In dev/localhost, set up polling since real-time is disabled
+    let pollInterval: NodeJS.Timeout | undefined
+    if (isDevelopment || isLocalhost) {
+      pollInterval = setInterval(() => fetchMessages(), MIN_FETCH_INTERVAL)
     }
 
     return () => {
-      console.log('[CLEANUP] Cleaning up chat...')
       if (channelRef.current) {
         channelRef.current.unsubscribe()
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
+      if (pollInterval) {
+        clearInterval(pollInterval)
+      }
     }
-  }, []) // Empty dependency array - only run once!
+  }, [])
 
   return {
     messages,
     isLoading,
-    isConnected: isDevelopment || isLocalhost ? false : isConnected, // Show as disconnected in dev
+    isConnected: isDevelopment || isLocalhost ? false : isConnected,
     sendMessage,
     refetchMessages: fetchMessages
   }
-} 
+}

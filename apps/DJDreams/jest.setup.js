@@ -4,6 +4,14 @@
 // Used for __tests__/testing-library.js
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
+import nodeCrypto from 'node:crypto'
+
+// Polyfill crypto.randomUUID for jsdom
+Object.defineProperty(globalThis.crypto, 'randomUUID', {
+  value: () => nodeCrypto.randomUUID(),
+  writable: true,
+  configurable: true,
+})
 
 // Mock Next.js Image component
 jest.mock('next/image', () => ({
@@ -36,20 +44,22 @@ jest.mock('@worldcoin/minikit-js', () => ({
   },
 }))
 
-// Mock window.document methods
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-})
+// Mock window.document methods (only in jsdom environment)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(), // deprecated
+      removeListener: jest.fn(), // deprecated
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  })
+}
 
 // Suppress console errors for known issues in tests
 const originalError = console.error
