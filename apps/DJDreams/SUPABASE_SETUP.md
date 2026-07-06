@@ -1,52 +1,35 @@
-# Supabase Setup for DJ Dreams Chat
+# Supabase Setup for DJ Dreams
 
 ## 1. Create Supabase Project
 1. Go to [supabase.com](https://supabase.com)
 2. Create a new project
-3. Copy your project URL and anon key
+3. Copy your project URL, anon key, and **service role key**
+   (Project Settings → API)
 
 ## 2. Environment Variables
-Add to your `.env.local`:
+Add to `apps/DJDreams/.env.local` (and to Vercel for deployments):
 ```
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
+The service role key is server-only — all API routes (sessions, chat,
+payments) require it. Never expose it to the browser.
 
 ## 3. Database Schema
-Run this SQL in your Supabase SQL editor:
+Run [`supabase/migrations/001_full_schema.sql`](../../supabase/migrations/001_full_schema.sql)
+in the Supabase SQL editor. It creates:
 
-```sql
--- Create messages table
-CREATE TABLE messages (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  username TEXT NOT NULL,
-  message TEXT NOT NULL,
-  verified BOOLEAN DEFAULT true,
-  nullifier_hash TEXT,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  is_moderated BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+- `messages` — chat messages (includes `is_boosted`, `session_nullifier`)
+- `verified_sessions` — one row per verified World ID nullifier
+- `payment_references` — one-time payment references for tips/boosts
 
--- Create index for better performance
-CREATE INDEX idx_messages_timestamp ON messages(timestamp DESC);
-CREATE INDEX idx_messages_user_id ON users(user_id);
+plus RLS policies (anon may only SELECT `messages`; everything else is
+service-role-only) and adds `messages` to the realtime publication.
 
--- Enable Row Level Security
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+The script is idempotent — safe to re-run on an existing project.
 
--- Create policy to allow all authenticated users to read messages
-CREATE POLICY "Allow all users to read messages" ON messages
-  FOR SELECT USING (true);
-
--- Create policy to allow verified users to insert messages
-CREATE POLICY "Allow verified users to insert messages" ON messages
-  FOR INSERT WITH CHECK (verified = true);
-
--- Enable real-time subscriptions
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-```
-
-## 4. Real-time Setup
-The app will use Supabase real-time subscriptions for live updates. 
+## 4. Real-time
+Browsers subscribe to `messages` INSERTs with the anon key (already enabled
+by the migration). Note: realtime is intentionally disabled on localhost —
+dev uses 10s polling instead.
