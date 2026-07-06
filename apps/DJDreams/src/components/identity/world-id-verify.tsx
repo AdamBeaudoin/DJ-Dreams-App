@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/use-toast'
 import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
+import { upgradeSessionWithWalletAuth } from '@/lib/domains/identity/wallet-auth-client'
 
 interface WorldIdVerifyProps {
   onVerified: (nullifier: string, username: string) => void
@@ -77,16 +78,32 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
     verifyResultRef.current = { nullifier: data.data.nullifier, username: data.data.username }
   }
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     const result = verifyResultRef.current
-    if (result) {
-      onVerified(result.nullifier, result.username)
-      toast({
-        title: 'Verified!',
-        description: `Welcome ${result.username}! You can now chat.`,
-      })
-      verifyResultRef.current = null
+    if (!result) return
+
+    // After World ID proves personhood, run MiniKit Wallet Auth to surface the
+    // user's real World App username. This is best-effort: outside World App, when
+    // MiniKit isn't installed, or if the user rejects the prompt, we keep the
+    // fallback "Human #xxxxxx" name — verify and chat still work.
+    setIsLoading(true)
+    try {
+      const upgrade = await upgradeSessionWithWalletAuth(result.nullifier)
+      if (upgrade?.username) {
+        result.username = upgrade.username
+      }
+    } catch (error) {
+      console.error('Wallet auth upgrade failed:', error)
+    } finally {
+      setIsLoading(false)
     }
+
+    onVerified(result.nullifier, result.username)
+    toast({
+      title: 'Verified!',
+      description: `Welcome ${result.username}! You can now chat.`,
+    })
+    verifyResultRef.current = null
   }
 
   const handleError = (errorCode: unknown) => {

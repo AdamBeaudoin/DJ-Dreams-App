@@ -68,3 +68,33 @@ export async function updateSessionUsername(
 
   return data as VerifiedSession
 }
+
+/**
+ * Upgrade a session after successful MiniKit Wallet Auth: stamp the real World App
+ * username and the SIWE-verified wallet address onto the existing session row.
+ *
+ * Requires the `wallet_address` column (migration 003). Callers should fall back to
+ * `updateSessionUsername` if this throws (e.g. migration not yet applied).
+ */
+export async function updateSessionWalletAuth(
+  nullifier: string,
+  username: string,
+  walletAddress: string
+): Promise<VerifiedSession> {
+  const { data, error } = await getSupabaseServer()
+    .from('verified_sessions')
+    .update({
+      username,
+      wallet_address: walletAddress,
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq('nullifier', nullifier)
+    .select()
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update session wallet auth: ${error?.message}`)
+  }
+
+  return data as VerifiedSession
+}
