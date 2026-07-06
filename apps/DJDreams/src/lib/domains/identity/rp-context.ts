@@ -12,7 +12,7 @@ export function generateRpContext(action: string): RpContextResponse {
     throw new Error('RP_ID not configured')
   }
 
-  const { sig, nonce, createdAt, expiresAt } = signRequest(action, signingKey)
+  const { sig, nonce, createdAt, expiresAt } = signRequest({ signingKeyHex: signingKey, action })
 
   return {
     rp_id: rpId,
