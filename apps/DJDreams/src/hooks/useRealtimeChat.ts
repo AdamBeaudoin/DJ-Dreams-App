@@ -6,8 +6,12 @@ import { useToast } from '@/components/ui/use-toast'
 const isDevelopment = process.env.NODE_ENV === 'development'
 const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
-// In dev (polling is primary), poll frequently. In prod (real-time handles it), poll rarely as fallback.
-const MIN_FETCH_INTERVAL = isDevelopment || isLocalhost ? 10_000 : 5 * 60_000
+// Realtime needs the browser Supabase client (anon key) and is disabled in dev.
+const realtimeAvailable = !!supabase && !isDevelopment && !isLocalhost
+
+// When realtime is unavailable (dev, or anon key not configured), polling is
+// the primary transport — poll frequently. Otherwise it's a rare fallback.
+const MIN_FETCH_INTERVAL = realtimeAvailable ? 5 * 60_000 : 15_000
 
 export function useRealtimeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -155,13 +159,13 @@ export function useRealtimeChat() {
   useEffect(() => {
     fetchMessages(true)
 
-    if (!isDevelopment && !isLocalhost) {
+    if (realtimeAvailable) {
       setupRealtimeSubscription()
     }
 
-    // In dev/localhost, set up polling since real-time is disabled
+    // Without realtime, polling is the only way messages arrive
     let pollInterval: NodeJS.Timeout | undefined
-    if (isDevelopment || isLocalhost) {
+    if (!realtimeAvailable) {
       pollInterval = setInterval(() => fetchMessages(), MIN_FETCH_INTERVAL)
     }
 
