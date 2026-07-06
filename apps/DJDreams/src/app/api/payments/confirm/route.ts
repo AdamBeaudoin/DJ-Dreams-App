@@ -40,8 +40,12 @@ export async function POST(req: NextRequest) {
 
     const tx = await resp.json()
 
-    // Require explicit success (not just "not failed")
-    if (tx?.reference !== payload.reference || tx?.status !== 'completed') {
+    // The transaction is usually still 'pending' when the pay dialog closes —
+    // on-chain settlement takes time. Follow World's documented pattern:
+    // accept unless the transaction explicitly failed. Double-spends are
+    // prevented by the one-time reference consumption below.
+    const txStatus = tx?.transaction_status ?? tx?.status
+    if (tx?.reference !== payload.reference || txStatus === 'failed') {
       return NextResponse.json({ error: 'Transaction not confirmed' }, { status: 400 })
     }
 

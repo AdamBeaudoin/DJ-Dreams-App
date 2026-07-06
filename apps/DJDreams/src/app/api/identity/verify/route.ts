@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       data: { nullifier: session.nullifier, username: session.username },
     })
 
-    setSessionCookie(response, session.nullifier)
+    setSessionCookie(response, session.session_token)
 
     return response
   } catch (error) {

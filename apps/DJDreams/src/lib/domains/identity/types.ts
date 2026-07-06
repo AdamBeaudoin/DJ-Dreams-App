@@ -1,6 +1,8 @@
 export interface VerifiedSession {
   nullifier: string
   username: string
+  /** Random opaque token stored in the session cookie. Never expose in API responses. */
+  session_token: string
   created_at: string
   last_seen_at: string
 }

@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { lookupSession } from './session'
+import { lookupSessionByToken } from './session'
 import type { VerifiedSession } from './types'
 
 const SESSION_COOKIE = 'dj-session'
@@ -14,20 +14,23 @@ const BASE_COOKIE_OPTIONS = {
 }
 
 /**
- * Set an HTTP-only session cookie containing the nullifier.
+ * Set an HTTP-only session cookie containing the opaque session token.
  * Call this after successful World ID verification.
+ *
+ * The cookie must never contain the nullifier: nullifiers are public
+ * (exposed as user_id on chat messages) and would allow impersonation.
  */
-export function setSessionCookie(response: NextResponse, nullifier: string): void {
-  response.cookies.set(SESSION_COOKIE, nullifier, {
+export function setSessionCookie(response: NextResponse, sessionToken: string): void {
+  response.cookies.set(SESSION_COOKIE, sessionToken, {
     ...BASE_COOKIE_OPTIONS,
     maxAge: COOKIE_MAX_AGE,
   })
 }
 
 /**
- * Read the session cookie and return the nullifier, or null if absent.
+ * Read the session cookie and return the session token, or null if absent.
  */
-export function getSessionNullifier(): string | null {
+export function getSessionToken(): string | null {
   const cookieStore = cookies()
   return cookieStore.get(SESSION_COOKIE)?.value ?? null
 }
@@ -56,13 +59,13 @@ type AuthResult =
  *   // auth.session is now guaranteed
  */
 export async function requireSession(): Promise<AuthResult> {
-  const nullifier = getSessionNullifier()
+  const token = getSessionToken()
 
-  if (!nullifier) {
+  if (!token) {
     return { error: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) }
   }
 
-  const session = await lookupSession(nullifier)
+  const session = await lookupSessionByToken(token)
 
   if (!session) {
     return { error: NextResponse.json({ error: 'Invalid or expired session' }, { status: 403 }) }

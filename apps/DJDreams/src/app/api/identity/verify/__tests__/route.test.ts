@@ -72,6 +72,7 @@ describe('POST /api/identity/verify', () => {
     mockCreateSession.mockResolvedValueOnce({
       nullifier: '0xabc123',
       username: 'TestUser',
+      session_token: 'tok_random_abc',
       created_at: '2025-01-01',
       last_seen_at: '2025-01-01',
     })
@@ -84,7 +85,8 @@ describe('POST /api/identity/verify', () => {
     expect(body.data.username).toBe('TestUser')
 
     expect(mockCreateSession).toHaveBeenCalledWith('0xabc123', 'TestUser')
-    expect(mockSetSessionCookie).toHaveBeenCalledWith(expect.anything(), '0xabc123')
+    // Cookie must carry the opaque token, never the (public) nullifier
+    expect(mockSetSessionCookie).toHaveBeenCalledWith(expect.anything(), 'tok_random_abc')
   })
 
   it('generates default username from nullifier when not provided', async () => {
@@ -95,6 +97,7 @@ describe('POST /api/identity/verify', () => {
     mockCreateSession.mockResolvedValueOnce({
       nullifier: '0xdef456',
       username: 'Human #ef456',
+      session_token: 'tok_random_def',
       created_at: '2025-01-01',
       last_seen_at: '2025-01-01',
     })

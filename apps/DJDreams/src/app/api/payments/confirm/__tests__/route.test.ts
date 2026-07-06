@@ -76,10 +76,10 @@ describe('POST /api/payments/confirm', () => {
     expect(res.status).toBe(502)
   })
 
-  it('returns 400 when transaction is not confirmed', async () => {
+  it('returns 400 when transaction failed on-chain', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ reference: 'ref1', status: 'pending' }),
+      json: async () => ({ reference: 'ref1', status: 'failed' }),
     })
 
     const res = await POST(makeRequest({
@@ -88,6 +88,33 @@ describe('POST /api/payments/confirm', () => {
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error).toBe('Transaction not confirmed')
+  })
+
+  it('returns 400 when reference does not match', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reference: 'ref_other', status: 'completed' }),
+    })
+
+    const res = await POST(makeRequest({
+      payload: { transaction_id: 'tx1', reference: 'ref1', status: 'success' },
+    }))
+    expect(res.status).toBe(400)
+  })
+
+  it('accepts a pending transaction (settlement takes time after the pay dialog)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reference: 'ref1', transaction_status: 'pending' }),
+    })
+    mockConsumeReference.mockResolvedValueOnce(true)
+
+    const res = await POST(makeRequest({
+      payload: { transaction_id: 'tx1', reference: 'ref1', status: 'success' },
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
   })
 
   it('returns 409 when reference is already consumed', async () => {
