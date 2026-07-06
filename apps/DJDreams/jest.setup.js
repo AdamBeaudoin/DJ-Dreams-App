@@ -59,6 +59,12 @@ if (typeof window !== 'undefined') {
       dispatchEvent: jest.fn(),
     })),
   })
+
+  // jsdom does not implement scrollIntoView; stub it so components that auto-scroll
+  // on mount (e.g. ChatRoom) render without throwing.
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = jest.fn()
+  }
 }
 
 // Suppress console errors for known issues in tests

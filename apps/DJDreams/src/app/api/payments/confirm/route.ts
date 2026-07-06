@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { MiniAppPaymentSuccessPayload } from '@worldcoin/minikit-js'
 import { requireSession } from '@/lib/domains/identity/auth'
 import { consumeReference } from '@/lib/domains/payments/repository'
+import { env, MissingEnvError } from '@/lib/env'
 
 interface IRequestPayload {
   payload: MiniAppPaymentSuccessPayload
@@ -18,11 +19,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    const appId = process.env.APP_ID || process.env.NEXT_PUBLIC_APP_ID
-    const apiKey = process.env.DEV_PORTAL_API_KEY
-    if (!appId || !apiKey) {
-      return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
-    }
+    const appId = env.appId()
+    const apiKey = env.devPortalApiKey()
 
     // Verify transaction with World Developer Portal
     const resp = await fetch(
@@ -59,6 +57,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof MissingEnvError) {
+      console.error('Confirm payment error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
     console.error('Confirm payment error:', error)
     return NextResponse.json({ error: 'Unexpected error' }, { status: 500 })
   }

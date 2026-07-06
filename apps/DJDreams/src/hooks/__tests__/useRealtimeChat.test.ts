@@ -63,6 +63,32 @@ describe('useRealtimeChat', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/chat/messages?limit=50')
   })
 
+  it('exposes isEmpty as false once messages load', async () => {
+    const { result } = renderHook(() => useRealtimeChat())
+
+    // Before fetch resolves: loading, not empty
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.isEmpty).toBe(false)
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(result.current.isEmpty).toBe(false)
+  })
+
+  it('exposes isEmpty true when no messages load', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { messages: [] } }),
+    })
+
+    const { result } = renderHook(() => useRealtimeChat())
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(result.current.messages).toHaveLength(0)
+    expect(result.current.isEmpty).toBe(true)
+  })
+
   it('sendMessage calls API and does optimistic insert', async () => {
     const savedMessage = { id: '3', message: 'new msg', username: 'Me', created_at: '2025-01-01T00:02:00Z' }
 

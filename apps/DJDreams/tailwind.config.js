@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -46,6 +50,27 @@ module.exports = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+      },
+      boxShadow: {
+        glow: "0 0 0 1px hsl(var(--primary) / 0.15), 0 8px 30px -12px hsl(var(--primary) / 0.45)",
+        "glow-purple": "0 0 0 1px hsl(var(--accent) / 0.2), 0 8px 30px -12px hsl(280 80% 60% / 0.4)",
+        card: "0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 12px 40px -20px rgb(0 0 0 / 0.8)",
+      },
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.5" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 200ms ease-out",
+        "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
       },
     },
   },

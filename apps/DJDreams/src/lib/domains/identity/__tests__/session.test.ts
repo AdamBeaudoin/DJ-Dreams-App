@@ -4,7 +4,7 @@ jest.mock('@/lib/supabaseServer', () => ({
   getSupabaseServer: () => ({ from: (...args: unknown[]) => { mockCalls.push({ method: 'from', args }); return mockProxy } }),
 }))
 
-import { lookupSessionByToken, createSession, touchSession } from '../session'
+import { lookupSessionByToken, createSession, touchSession, updateSessionUsername } from '../session'
 
 describe('Identity Session', () => {
   beforeEach(() => resetMock())
@@ -56,6 +56,24 @@ describe('Identity Session', () => {
       await touchSession('0xabc123')
       expect(callsFor('from')[0].args).toEqual(['verified_sessions'])
       expect(callsFor('update')[0].args[0]).toHaveProperty('last_seen_at')
+      expect(callsFor('eq')[0].args).toEqual(['nullifier', '0xabc123'])
+    })
+  })
+
+  describe('updateSessionUsername', () => {
+    it('updates username and returns the session', async () => {
+      const session = {
+        nullifier: '0xabc123',
+        username: 'alice',
+        session_token: 'tok_abc',
+        created_at: '2025-01-01',
+        last_seen_at: '2025-01-01',
+      }
+      mockResult.data = session
+
+      const result = await updateSessionUsername('0xabc123', 'alice')
+      expect(result).toEqual(session)
+      expect(callsFor('update')[0].args[0]).toMatchObject({ username: 'alice' })
       expect(callsFor('eq')[0].args).toEqual(['nullifier', '0xabc123'])
     })
   })

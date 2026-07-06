@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSession } from '@/lib/domains/identity/session'
 import { setSessionCookie } from '@/lib/domains/identity/auth'
+import { resolveDisplayName } from '@/lib/domains/identity/username'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No nullifier in verification response' }, { status: 500 })
     }
 
-    const displayName = username || `Human #${nullifier.slice(-6)}`
+    const displayName = resolveDisplayName(nullifier, username)
     const session = await createSession(nullifier, displayName)
 
     const response = NextResponse.json({

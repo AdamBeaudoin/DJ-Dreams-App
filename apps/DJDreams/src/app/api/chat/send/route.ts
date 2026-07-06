@@ -4,6 +4,7 @@ import { touchSession } from '@/lib/domains/identity/session'
 import { insertMessage } from '@/lib/domains/chat/repository'
 import { moderateMessage, validateMessage } from '@/lib/domains/moderation/moderation'
 import { hasRecentBoostPayment } from '@/lib/domains/payments/repository'
+import { chatSendRateLimiter } from '@/lib/rate-limit'
 import type { ChatMessageInsert } from '@/lib/domains/chat/types'
 
 export const dynamic = 'force-dynamic'
@@ -16,6 +17,21 @@ export async function POST(req: NextRequest) {
     if (auth.error) return auth.error
 
     const { session } = auth
+
+    // Per-nullifier cooldown: 1 message per 2s, max 5 per 10s.
+    const limit = chatSendRateLimiter.check(session.nullifier)
+    if (!limit.allowed) {
+      const retryAfterSeconds = Math.ceil(limit.retryAfterMs / 1000)
+      const message =
+        limit.reason === 'too-frequent'
+          ? 'You are sending messages too quickly. Please slow down.'
+          : 'You have sent too many messages. Please wait a moment.'
+      return NextResponse.json(
+        { error: message, retryAfter: retryAfterSeconds },
+        { status: 429, headers: { RetryAfter: String(retryAfterSeconds) } }
+      )
+    }
+
     const { message, is_boosted } = await req.json()
 
     // Validate boost claim against recent payment

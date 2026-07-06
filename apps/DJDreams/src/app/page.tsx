@@ -8,6 +8,8 @@ import { useRealtimeChat } from '@/hooks/useRealtimeChat'
 import { useToast } from '@/components/ui/use-toast'
 import { ToastAction } from '@/components/ui/toast'
 import type { PayCommandInput } from '@worldcoin/minikit-js'
+import { isFallbackUsername } from '@/lib/domains/identity/username'
+import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
 
 const STORAGE_KEY = 'dj-dreams-session'
 
@@ -52,6 +54,41 @@ export default function HomePage() {
       }
     } catch {}
   }, [])
+
+  // Refresh fallback usernames from World App when a session already exists
+  useEffect(() => {
+    if (!nullifier || !username || !isFallbackUsername(username)) return
+
+    let cancelled = false
+
+    resolveWorldAppUsername().then(async (worldUsername) => {
+      if (cancelled || !worldUsername || worldUsername === username) return
+
+      try {
+        const res = await fetch('/api/identity/session', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: worldUsername }),
+        })
+
+        if (!res.ok) return
+
+        const data = await res.json()
+        const updatedUsername = data.data?.username
+        if (!updatedUsername || cancelled) return
+
+        setUsername(updatedUsername)
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ nullifier, username: updatedUsername })
+        )
+      } catch {}
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [nullifier, username])
 
   // Fetch donor status on mount and when nullifier changes
   useEffect(() => {
@@ -185,16 +222,16 @@ export default function HomePage() {
   }, [toast, handleTip])
 
   return (
-    <div className="min-h-[100dvh] bg-black overflow-hidden">
-      <div className={isLandscape ? 'hidden' : 'container mx-auto px-3 sm:px-4 py-2 sm:py-4 max-w-5xl'}>
-        <header className="text-center mb-3 sm:mb-4">
-          <div className="mb-1 sm:mb-2 flex justify-center">
+    <div className="min-h-[100dvh] bg-background overflow-hidden">
+      <div className={isLandscape ? 'hidden' : 'container mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 max-w-5xl'}>
+        <header className="text-center mb-5 sm:mb-6">
+          <div className="mb-2 sm:mb-3 flex justify-center">
             <Image
               src="/DJ-Dreams-Logo.jpg"
               alt="DJ Dreams Logo"
               width={280}
               height={96}
-              className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain max-w-[280px] sm:max-w-none"
+              className="h-12 sm:h-16 md:h-20 lg:h-24 w-auto object-contain max-w-[280px] sm:max-w-none drop-shadow-[0_8px_30px_rgba(34,211,238,0.25)]"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
                 const fallback = document.getElementById('logo-fallback')
@@ -204,22 +241,18 @@ export default function HomePage() {
             />
             <h1
               id="logo-fallback"
-              className="text-3xl sm:text-4xl md:text-6xl font-bold text-cyan-400 mb-4 tracking-tight hidden"
-              style={{fontFamily: 'serif'}}
+              className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4 tracking-tight hidden font-display bg-gradient-to-r from-cyan-300 via-cyan-200 to-fuchsia-300 bg-clip-text text-transparent"
             >
               DJ Dreams
             </h1>
           </div>
-          <p
-            className="text-[10px] sm:text-xs md:text-sm text-cyan-300/70 mb-3 sm:mb-4 px-4 uppercase tracking-[0.25em] font-light"
-            style={{ fontFamily: 'serif' }}
-          >
+          <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-4 sm:mb-6 px-4 uppercase tracking-[0.3em] font-light">
             DJ sets from around the world
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-2 sm:gap-3">
             <button
               onClick={() => streamPlayerRef.current?.previousSet()}
-              className="px-3 py-1.5 rounded-full text-xs font-medium min-h-[36px] transition-all touch-manipulation text-white/40 hover:text-white/70 active:text-white"
+              className="px-4 py-1.5 rounded-full text-xs font-medium min-h-[36px] transition-all duration-200 touch-manipulation text-muted-foreground hover:text-foreground hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97]"
               aria-label="Previous set"
             >
               ‹ Prev
@@ -227,13 +260,17 @@ export default function HomePage() {
             <button
               onClick={handleTip}
               disabled={isTipping}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium min-h-[36px] transition-all touch-manipulation ${!isTipping ? 'bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20 active:bg-cyan-400/30 border border-cyan-400/30' : 'bg-gray-600/50 text-gray-400 cursor-not-allowed'}`}
+              className={`px-5 py-1.5 rounded-full text-xs font-semibold min-h-[36px] transition-all duration-200 touch-manipulation focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97] ${
+                !isTipping
+                  ? 'bg-primary/15 text-primary hover:bg-primary/25 hover:shadow-glow border border-primary/30'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed border border-transparent'
+              }`}
             >
-              {isTipping ? 'Sending...' : 'Tip the DJ'}
+              {isTipping ? 'Sending…' : 'Tip the builder'}
             </button>
             <button
               onClick={() => streamPlayerRef.current?.nextSet()}
-              className="px-3 py-1.5 rounded-full text-xs font-medium min-h-[36px] transition-all touch-manipulation text-white/40 hover:text-white/70 active:text-white"
+              className="px-4 py-1.5 rounded-full text-xs font-medium min-h-[36px] transition-all duration-200 touch-manipulation text-muted-foreground hover:text-foreground hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97]"
               aria-label="Next set"
             >
               Next ›
@@ -242,8 +279,8 @@ export default function HomePage() {
         </header>
       </div>
 
-      <div className={isLandscape ? '' : 'max-w-4xl mx-auto px-3 sm:px-4'}>
-        <div className={isLandscape ? '' : 'bg-black/30 backdrop-blur-sm border border-white/10 rounded-xl p-3 sm:p-6 mb-6 sm:mb-8'}>
+      <div className={isLandscape ? '' : 'max-w-4xl mx-auto px-4 sm:px-6'}>
+        <div className={isLandscape ? '' : 'rounded-2xl border border-white/10 bg-card/40 backdrop-blur-md p-3 sm:p-5 mb-6 sm:mb-8 shadow-card'}>
           <StreamPlayer
             ref={streamPlayerRef}
             onLandscapeChange={handleLandscapeChange}
@@ -255,7 +292,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className={isLandscape ? 'hidden' : 'max-w-4xl mx-auto px-3 sm:px-4 mb-6 sm:mb-8 pb-safe'}>
+      <div className={isLandscape ? 'hidden' : 'max-w-4xl mx-auto px-4 sm:px-6 mb-6 sm:mb-8 pb-safe'}>
         <ChatRoom
           nullifier={nullifier}
           username={username}

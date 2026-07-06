@@ -17,6 +17,7 @@ export function useRealtimeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
+  const [pollConnected, setPollConnected] = useState(false)
   const channelRef = useRef<ReturnType<NonNullable<typeof supabase>['channel']> | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
@@ -45,6 +46,9 @@ export function useRealtimeChat() {
         msgs.forEach(m => { if (m.is_donor) newDonors.add(m.user_id) })
         donorUserIdsRef.current = newDonors
         setMessages(msgs)
+        if (!realtimeAvailable) {
+          setPollConnected(true)
+        }
       }
     } catch (error) {
       console.error('Error fetching messages:', error)
@@ -185,7 +189,12 @@ export function useRealtimeChat() {
   return {
     messages,
     isLoading,
-    isConnected: isDevelopment || isLocalhost ? false : isConnected,
+    isEmpty: !isLoading && messages.length === 0,
+    isConnected: isDevelopment || isLocalhost
+      ? false
+      : realtimeAvailable
+        ? isConnected
+        : pollConnected,
     sendMessage,
     refetchMessages: fetchMessages
   }

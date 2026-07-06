@@ -33,6 +33,11 @@ jest.mock('@/lib/domains/moderation/moderation', () => ({
   },
 }))
 
+const mockCheckRateLimit = jest.fn()
+jest.mock('@/lib/rate-limit', () => ({
+  chatSendRateLimiter: { check: (...args: unknown[]) => mockCheckRateLimit(...args) },
+}))
+
 import { POST } from '../route'
 
 const SESSION = {
@@ -54,6 +59,7 @@ describe('POST /api/chat/send', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockRequireSession.mockResolvedValue({ session: SESSION })
+    mockCheckRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 })
   })
 
   it('returns 401 when not authenticated', async () => {
@@ -108,5 +114,44 @@ describe('POST /api/chat/send', () => {
     expect(mockInsertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ message: '****', is_moderated: true })
     )
+  })
+
+  describe('rate limiting', () => {
+    it('checks the rate limiter with the session nullifier', async () => {
+      mockInsertMessage.mockResolvedValueOnce({ id: 'msg1', message: 'hi' })
+      await POST(makeRequest({ message: 'hi' }))
+      expect(mockCheckRateLimit).toHaveBeenCalledWith('0xabc')
+    })
+
+    it('returns 429 with a clear message when sending too frequently', async () => {
+      mockCheckRateLimit.mockReturnValueOnce({
+        allowed: false,
+        retryAfterMs: 1500,
+        reason: 'too-frequent',
+      })
+
+      const res = await POST(makeRequest({ message: 'hi' }))
+      expect(res.status).toBe(429)
+      expect(res.headers.get('RetryAfter')).toBe('2')
+
+      const body = await res.json()
+      expect(body.error).toMatch(/too quickly/i)
+      expect(body.retryAfter).toBe(2)
+      expect(mockInsertMessage).not.toHaveBeenCalled()
+    })
+
+    it('returns 429 with a clear message when exceeding the window cap', async () => {
+      mockCheckRateLimit.mockReturnValueOnce({
+        allowed: false,
+        retryAfterMs: 4000,
+        reason: 'too-many',
+      })
+
+      const res = await POST(makeRequest({ message: 'hi' }))
+      expect(res.status).toBe(429)
+      const body = await res.json()
+      expect(body.error).toMatch(/too many messages/i)
+      expect(mockInsertMessage).not.toHaveBeenCalled()
+    })
   })
 })

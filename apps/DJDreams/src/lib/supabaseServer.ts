@@ -1,18 +1,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { env } from './env'
 
 let _client: SupabaseClient | null = null
 
 export function getSupabaseServer(): SupabaseClient {
   if (_client) return _client
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      'Supabase server client requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY'
-    )
-  }
+  // Throws MissingEnvError with the full missing list on first use rather than
+  // a generic 500 deeper in the request.
+  const supabaseUrl = env.supabaseUrl()
+  const serviceRoleKey = env.supabaseServiceRoleKey()
 
   _client = createClient(supabaseUrl, serviceRoleKey, {
     global: {

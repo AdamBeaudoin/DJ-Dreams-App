@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server'
+import { _resetEnvForTests } from '@/lib/env'
 
 const mockRequireSession = jest.fn()
 const mockConsumeReference = jest.fn()
@@ -26,6 +27,19 @@ const SESSION = {
   last_seen_at: '2025-01-01',
 }
 
+// The env module memoizes process.env at first access and validates every
+// required var together, so tests must provide all required vars (not just the
+// ones this route reads) and clear the cache between cases.
+const REQUIRED_ENV = {
+  NEXT_PUBLIC_APP_ID: 'app_test',
+  RP_ID: 'rp_test',
+  RP_SIGNING_KEY: 'signing_key_test',
+  DEV_PORTAL_API_KEY: 'key_test',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://supabase.test',
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon_test',
+  SUPABASE_SERVICE_ROLE_KEY: 'service_test',
+}
+
 function makeRequest(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/payments/confirm', {
     method: 'POST',
@@ -35,21 +49,24 @@ function makeRequest(body: Record<string, unknown>) {
 }
 
 describe('POST /api/payments/confirm', () => {
-  let savedAppId: string | undefined
-  let savedApiKey: string | undefined
+  const savedEnv: Record<string, string | undefined> = {}
 
   beforeEach(() => {
     jest.clearAllMocks()
-    savedAppId = process.env.APP_ID
-    savedApiKey = process.env.DEV_PORTAL_API_KEY
-    process.env.APP_ID = 'app_test'
-    process.env.DEV_PORTAL_API_KEY = 'key_test'
+    _resetEnvForTests()
+    for (const [k, v] of Object.entries(REQUIRED_ENV)) {
+      savedEnv[k] = process.env[k]
+      process.env[k] = v
+    }
     mockRequireSession.mockResolvedValue({ session: SESSION })
   })
 
   afterEach(() => {
-    process.env.APP_ID = savedAppId
-    process.env.DEV_PORTAL_API_KEY = savedApiKey
+    for (const [k, v] of Object.entries(savedEnv)) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+    _resetEnvForTests()
   })
 
   it('returns 401 when session cookie is missing', async () => {
@@ -145,5 +162,22 @@ describe('POST /api/payments/confirm', () => {
     expect(body.success).toBe(true)
 
     expect(mockConsumeReference).toHaveBeenCalledWith('ref1', '0xabc', 'tx1')
+  })
+
+  it('returns 500 with a clear missing-var list when env is not configured', async () => {
+    // Wipe the required vars the route reads; env validation reports every
+    // missing required var in the error message.
+    delete process.env.NEXT_PUBLIC_APP_ID
+    delete process.env.DEV_PORTAL_API_KEY
+    _resetEnvForTests()
+
+    const res = await POST(makeRequest({
+      payload: { transaction_id: 'tx1', reference: 'ref1', status: 'success' },
+    }))
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error).toMatch(/Missing env vars:/)
+    expect(body.error).toContain('NEXT_PUBLIC_APP_ID')
+    expect(body.error).toContain('DEV_PORTAL_API_KEY')
   })
 })

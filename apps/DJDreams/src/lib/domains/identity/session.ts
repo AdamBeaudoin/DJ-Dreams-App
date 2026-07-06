@@ -50,3 +50,21 @@ export async function touchSession(nullifier: string): Promise<void> {
     .update({ last_seen_at: new Date().toISOString() })
     .eq('nullifier', nullifier)
 }
+
+export async function updateSessionUsername(
+  nullifier: string,
+  username: string
+): Promise<VerifiedSession> {
+  const { data, error } = await getSupabaseServer()
+    .from('verified_sessions')
+    .update({ username, last_seen_at: new Date().toISOString() })
+    .eq('nullifier', nullifier)
+    .select()
+    .single()
+
+  if (error || !data) {
+    throw new Error(`Failed to update session username: ${error?.message}`)
+  }
+
+  return data as VerifiedSession
+}

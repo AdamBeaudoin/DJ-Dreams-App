@@ -6,6 +6,7 @@ import { deviceLegacy, type IDKitResult, type RpContext } from '@worldcoin/idkit
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/use-toast'
+import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
 
 interface WorldIdVerifyProps {
   onVerified: (nullifier: string, username: string) => void
@@ -55,10 +56,15 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
   }, [toast])
 
   const handleVerify = async (result: IDKitResult) => {
+    const worldUsername = await resolveWorldAppUsername()
+
     const res = await fetch('/api/identity/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proof: result }),
+      body: JSON.stringify({
+        proof: result,
+        ...(worldUsername && { username: worldUsername }),
+      }),
     })
 
     const data = await res.json()
@@ -99,7 +105,7 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
       <Button
         onClick={fetchRpContext}
         disabled={isLoading}
-        className="bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 border border-cyan-400/30 text-xs sm:text-sm px-3 py-1 min-h-[44px] rounded-full touch-manipulation"
+        className="bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
       >
         {isLoading ? (
           <div className="flex items-center gap-1">
