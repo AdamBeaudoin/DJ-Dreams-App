@@ -14,7 +14,13 @@ export function getSupabaseServer(): SupabaseClient {
     )
   }
 
-  _client = createClient(supabaseUrl, serviceRoleKey)
+  _client = createClient(supabaseUrl, serviceRoleKey, {
+    global: {
+      // Next.js patches global fetch and caches GET responses in route
+      // handlers by default — without no-store, message reads go stale.
+      fetch: (url, options) => fetch(url, { ...options, cache: 'no-store' }),
+    },
+  })
   return _client
 }
 
