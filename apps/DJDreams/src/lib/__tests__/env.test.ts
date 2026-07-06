@@ -56,7 +56,7 @@ describe('env', () => {
       expect(env.appId()).toBe('app_changed')
     })
 
-    it('throw MissingEnvError listing every missing required var on first use', () => {
+    it('throw MissingEnvError naming the missing var on first use', () => {
       delete process.env.NEXT_PUBLIC_APP_ID
       delete process.env.RP_SIGNING_KEY
       delete process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -64,7 +64,19 @@ describe('env', () => {
 
       expect(() => env.appId()).toThrow(MissingEnvError)
       expect(() => env.appId()).toThrow(/Missing env vars:/)
-      expect(() => env.appId()).toThrow('Missing env vars: NEXT_PUBLIC_APP_ID, RP_SIGNING_KEY, SUPABASE_SERVICE_ROLE_KEY')
+      expect(() => env.appId()).toThrow('Missing env vars: NEXT_PUBLIC_APP_ID')
+      expect(() => env.rpSigningKey()).toThrow('Missing env vars: RP_SIGNING_KEY')
+      expect(() => env.supabaseServiceRoleKey()).toThrow('Missing env vars: SUPABASE_SERVICE_ROLE_KEY')
+    })
+
+    it('do not block an accessor when only unrelated required vars are missing', () => {
+      delete process.env.DEV_PORTAL_API_KEY
+      delete process.env.RP_ID
+      _resetEnvForTests()
+      // Supabase vars are set, so supabase accessors must still work even
+      // though DEV_PORTAL_API_KEY and RP_ID are unset.
+      expect(env.supabaseUrl()).toBe('https://supabase.test')
+      expect(env.supabaseServiceRoleKey()).toBe('service_test')
     })
 
     it('treat empty-string vars as missing', () => {

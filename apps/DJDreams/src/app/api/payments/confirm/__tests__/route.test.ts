@@ -164,11 +164,9 @@ describe('POST /api/payments/confirm', () => {
     expect(mockConsumeReference).toHaveBeenCalledWith('ref1', '0xabc', 'tx1')
   })
 
-  it('returns 500 with a clear missing-var list when env is not configured', async () => {
-    // Wipe the required vars the route reads; env validation reports every
-    // missing required var in the error message.
+  it('returns 500 with a clear missing-var message when env is not configured', async () => {
+    // env validation names the specific missing var the route reads first.
     delete process.env.NEXT_PUBLIC_APP_ID
-    delete process.env.DEV_PORTAL_API_KEY
     _resetEnvForTests()
 
     const res = await POST(makeRequest({
@@ -178,6 +176,5 @@ describe('POST /api/payments/confirm', () => {
     const body = await res.json()
     expect(body.error).toMatch(/Missing env vars:/)
     expect(body.error).toContain('NEXT_PUBLIC_APP_ID')
-    expect(body.error).toContain('DEV_PORTAL_API_KEY')
   })
 })

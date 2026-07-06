@@ -4,16 +4,18 @@
  * Why this exists: previously each module read `process.env.X` directly, so a
  * missing variable surfaced as a generic 500 at request time with no hint about
  * what was missing. This module reads each var once, caches it, and gives every
- * caller a single typed accessor. Required vars fail fast with a clear
- * `Missing env vars: X, Y` list at first use — but only at first use (request
- * time), never at import time, so `next build` does not crash.
+ * caller a single typed accessor. Required accessors fail fast with a clear
+ * `Missing env vars: X` at first use — but only for the var being read, so a
+ * route that needs only Supabase is not blocked by an unrelated unset var. Fail
+ * fast happens only at first use (request time), never at import time, so
+ * `next build` does not crash.
  *
  * Two usage shapes:
- *   - `env.*` (e.g. `env.appId()`) — throws `MissingEnvError` listing every
- *     missing required var. Use in server route handlers and other runtime
- *     code where a missing var is a hard failure.
- *   - `tryReadEnv(name)` — non-throwing read that logs the missing list once
- *     and returns `undefined`. Use at module top-level (e.g. the browser
+ *   - `env.*` (e.g. `env.appId()`) — throws `MissingEnvError` naming the
+ *     missing var. Use in server route handlers and other runtime code where a
+ *     missing var is a hard failure.
+ *   - `tryReadEnv(name)` — non-throwing read that logs the full missing list
+ *     once and returns `undefined`. Use at module top-level (e.g. the browser
  *     Supabase client) where throwing would break the client bundle or the
  *     build.
  *
@@ -71,16 +73,16 @@ export class MissingEnvError extends Error {
 }
 
 /**
- * Return a required var, or throw `MissingEnvError` listing every missing
- * required var (not just the one requested) so the operator sees the full
- * picture the first time any required accessor runs.
+ * Return a required var, or throw `MissingEnvError` naming it. Only the
+ * requested var is validated, so unrelated unset vars do not block a route
+ * that does not need them.
  */
 function requireVar(name: RequiredVar): string {
-  const missing = missingRequired()
-  if (missing.length > 0) {
-    throw new MissingEnvError(missing)
+  const val = readOnce(name)
+  if (val === undefined || val === '') {
+    throw new MissingEnvError([name])
   }
-  return readOnce(name) as string
+  return val
 }
 
 export const env = {
