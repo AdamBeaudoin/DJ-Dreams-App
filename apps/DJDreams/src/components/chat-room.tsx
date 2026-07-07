@@ -38,6 +38,10 @@ const ChatMessageItem = memo(function ChatMessageItem({
 interface ChatRoomProps {
   nullifier: string | null
   username: string
+  /** True only after the server confirmed a valid session cookie — gates write access. */
+  canWrite: boolean
+  /** False until GET /api/identity/session has completed on mount. */
+  sessionChecked: boolean
   onVerified: (nullifier: string, username: string) => void
   messages: ChatMessage[]
   isLoading: boolean
@@ -46,7 +50,7 @@ interface ChatRoomProps {
 }
 
 export function ChatRoom({
-  nullifier, username, onVerified,
+  nullifier, username, canWrite, sessionChecked, onVerified,
   messages, isLoading, isConnected, sendMessage,
 }: ChatRoomProps) {
   const [newMessage, setNewMessage] = useState('')
@@ -54,15 +58,13 @@ export function ChatRoom({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
-  const isVerified = nullifier !== null
-
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !isVerified || isSending || !nullifier) return
+    if (!newMessage.trim() || !canWrite || isSending || !nullifier) return
 
     setIsSending(true)
 
@@ -116,7 +118,7 @@ export function ChatRoom({
             className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
           />
         </h3>
-        {!isVerified && <WorldIdVerify onVerified={onVerified} />}
+        {!canWrite && <WorldIdVerify onVerified={onVerified} />}
       </div>
 
       {/* Messages container */}
@@ -124,7 +126,7 @@ export function ChatRoom({
         {isLoading ? (
           <ChatSkeleton />
         ) : messages.length === 0 ? (
-          <ChatEmptyState isVerified={isVerified} />
+          <ChatEmptyState isVerified={canWrite} />
         ) : (
           <div className="space-y-3">
             {messages.map((message) => (
@@ -143,17 +145,17 @@ export function ChatRoom({
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder={!isVerified ? "Verify with World ID to chat" : "Type your message…"}
+          placeholder={!canWrite ? "Verify with World ID to chat" : "Type your message…"}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={!isVerified}
+          disabled={!canWrite}
           className="flex-1 bg-black/30 border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 min-h-[44px] touch-manipulation"
           maxLength={MAX_MESSAGE_LENGTH}
         />
         <Button
           onClick={handleSendMessage}
-          disabled={!newMessage.trim() || !isVerified || isSending}
+          disabled={!newMessage.trim() || !canWrite || isSending}
           className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 hover:shadow-glow disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent px-4 sm:px-6 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
         >
           {isSending ? (
@@ -172,7 +174,7 @@ export function ChatRoom({
         </div>
       )}
 
-      {isVerified && (
+      {canWrite && (
         <div className="mt-2 text-[10px] text-white/30 uppercase tracking-wider">
           <span className="text-cyan-400/50">{username}</span>
         </div>

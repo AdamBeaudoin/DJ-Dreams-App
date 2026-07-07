@@ -18,6 +18,8 @@ export default function HomePage() {
   const [isTipping, setIsTipping] = useState(false)
   const [nullifier, setNullifier] = useState<string | null>(null)
   const [username, setUsername] = useState('')
+  /** False until GET /api/identity/session completes — never trust localStorage alone for write access. */
+  const [sessionChecked, setSessionChecked] = useState(false)
   const [isLandscape, setIsLandscape] = useState(false)
   const [isDonor, setIsDonor] = useState(false)
   const { toast } = useToast()
@@ -25,36 +27,28 @@ export default function HomePage() {
   const streamPlayerRef = useRef<StreamPlayerHandle>(null)
   const { messages, isLoading, isConnected, sendMessage } = useRealtimeChat()
 
+  const canWrite = sessionChecked && nullifier !== null
+
   const handleLandscapeChange = useCallback((landscape: boolean) => {
     setIsLandscape(landscape)
   }, [])
 
-  // Restore + sync session: read localStorage for an instant first paint, then
-  // ask the server for the authoritative session. If the cookie is gone/expired
-  // the server returns 401/403 and we drop the stale local session so the UI
-  // never shows a "verified" state the API would reject. Network blips leave
-  // the local state as-is (we don't log someone out on a transient failure).
+  // Server-authoritative session: do NOT hydrate nullifier from localStorage
+  // before the server confirms the session cookie. Stale localStorage was
+  // unlocking the chat input even when the cookie was gone — the "I can write
+  // without verifying" bug.
   useEffect(() => {
     let cancelled = false
-
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const { nullifier: n, username: u } = JSON.parse(stored)
-        if (n) {
-          setNullifier(n)
-          setUsername(u || '')
-        }
-      }
-    } catch {}
 
     fetch('/api/identity/session', { method: 'GET' })
       .then(async (res) => {
         if (cancelled) return
+        let hasNullifier = false
         if (res.ok) {
           const data = await res.json()
           const s = data?.data
           if (s?.nullifier) {
+            hasNullifier = true
             setNullifier(s.nullifier)
             setUsername(s.username || '')
             try {
@@ -63,8 +57,14 @@ export default function HomePage() {
                 JSON.stringify({ nullifier: s.nullifier, username: s.username || '' })
               )
             } catch {}
+          } else {
+            setNullifier(null)
+            setUsername('')
+            try {
+              localStorage.removeItem(STORAGE_KEY)
+            } catch {}
           }
-        } else if (res.status === 401 || res.status === 403) {
+        } else {
           setNullifier(null)
           setUsername('')
           try {
@@ -73,7 +73,15 @@ export default function HomePage() {
         }
       })
       .catch(() => {
-        // Network error — keep the local first-paint state.
+        if (cancelled) return
+        setNullifier(null)
+        setUsername('')
+        try {
+          localStorage.removeItem(STORAGE_KEY)
+        } catch {}
+      })
+      .finally(() => {
+        if (!cancelled) setSessionChecked(true)
       })
 
     return () => {
@@ -128,6 +136,7 @@ export default function HomePage() {
   const handleVerified = (n: string, u: string) => {
     setNullifier(n)
     setUsername(u)
+    setSessionChecked(true)
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ nullifier: n, username: u }))
     } catch {}
@@ -302,6 +311,8 @@ export default function HomePage() {
         <ChatRoom
           nullifier={nullifier}
           username={username}
+          canWrite={canWrite}
+          sessionChecked={sessionChecked}
           onVerified={handleVerified}
           messages={messages}
           isLoading={isLoading}

@@ -11,6 +11,8 @@ jest.mock('@/components/identity/world-id-verify', () => ({
 const baseProps = {
   nullifier: 'null-123',
   username: 'tester',
+  canWrite: true,
+  sessionChecked: true,
   onVerified: jest.fn(),
   isConnected: true,
   sendMessage: jest.fn(),
@@ -47,11 +49,41 @@ describe('ChatRoom states', () => {
       <ChatRoom
         {...baseProps}
         nullifier={null}
+        canWrite={false}
         messages={[]}
         isLoading={false}
       />
     )
     expect(screen.getByText('Verify with World ID to join the chat')).toBeInTheDocument()
+  })
+
+  it('keeps input locked when nullifier exists but server has not confirmed session', () => {
+    render(
+      <ChatRoom
+        {...baseProps}
+        nullifier="stale-from-localstorage"
+        canWrite={false}
+        sessionChecked={true}
+        messages={[]}
+        isLoading={false}
+      />
+    )
+    expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
+    expect(screen.getByTestId('world-id-verify')).toBeInTheDocument()
+  })
+
+  it('keeps input locked until session check completes', () => {
+    render(
+      <ChatRoom
+        {...baseProps}
+        nullifier="null-123"
+        canWrite={false}
+        sessionChecked={false}
+        messages={[]}
+        isLoading={false}
+      />
+    )
+    expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
   })
 
   it('renders messages once loaded', async () => {
