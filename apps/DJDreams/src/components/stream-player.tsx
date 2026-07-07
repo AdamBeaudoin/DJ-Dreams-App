@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo } from 'react'
 import dynamic from 'next/dynamic'
 import { DJ_SETS, ROTATION_INTERVAL, getCurrentSetIndex } from '@/lib/domains/playback/playlist'
 import { canSkip, incrementSkipCount } from '@/lib/skip-counter'
@@ -21,6 +21,15 @@ const SWIPE_THRESHOLD = 60
 const MAX_HISTORY = 10
 const CONTROLS_TIMEOUT = 3000
 
+const PLAYER_CONFIG = {
+  playerVars: {
+    autoplay: 1,
+    rel: 0,
+    showinfo: 0,
+    modestbranding: 1,
+  },
+} as const
+
 interface StreamPlayerProps {
   onLandscapeChange?: (isLandscape: boolean) => void
   isDonor?: boolean
@@ -33,14 +42,21 @@ export interface StreamPlayerHandle {
   previousSet: () => void
 }
 
-export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
+const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
   function StreamPlayer({ onLandscapeChange, isDonor = false, onSkipBlocked }, ref) {
   const [streamError, setStreamError] = useState(false)
   const [currentSetIndex, setCurrentSetIndex] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [played, setPlayed] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
+
+  // Timers that advance/recover the track — held in refs so they can be cleared
+  // (previously stacked/leaked on every transition and error).
+  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // Last whole-percent pushed to state; gates setPlayed so we re-render at most
+  // once per 1% instead of on every progress tick.
+  const displayedPercentRef = useRef(0)
 
   // Landscape fullscreen state
   const [isLandscape, setIsLandscape] = useState(false)
@@ -71,6 +87,7 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
     setStreamError(false)
     setIsTransitioning(false)
     setPlayed(0)
+    displayedPercentRef.current = 0
   }, [])
 
   const goToPreviousSet = useCallback(() => {
@@ -80,6 +97,7 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
     setStreamError(false)
     setIsTransitioning(false)
     setPlayed(0)
+    displayedPercentRef.current = 0
   }, [])
 
   useImperativeHandle(ref, () => ({
@@ -169,21 +187,6 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
     }
   }, [goToNextSet, goToPreviousSet, isDonor, onSkipBlocked])
 
-  // On tap (not swipe), briefly disable overlay so next tap hits the iframe
-  const swipeOverlayRef = useRef<HTMLDivElement>(null)
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (isSwiping.current) return
-    const overlay = swipeOverlayRef.current
-    if (!overlay) return
-    // Hide overlay, find element underneath, click it, restore overlay
-    overlay.style.pointerEvents = 'none'
-    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
-    el?.click()
-    requestAnimationFrame(() => {
-      if (overlay) overlay.style.pointerEvents = 'auto'
-    })
-  }, [])
-
   // --- Playback lifecycle ---
 
   useEffect(() => {
@@ -192,39 +195,52 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
     return () => clearInterval(interval)
   }, [goToNextSet])
 
-  const handleProgress = (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
-    setPlayed(state.played)
+  // Clear any pending advance/recover timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current)
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
+    }
+  }, [])
+
+  const handleProgress = useCallback((state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
+    const pct = Math.round(state.played * 100)
+    if (pct !== displayedPercentRef.current) {
+      displayedPercentRef.current = pct
+      setPlayed(state.played)
+    }
 
     if (duration > 0 && !isTransitioning) {
       const remainingTime = duration - state.playedSeconds
 
       if (remainingTime <= 10 || state.played >= 0.98) {
         setIsTransitioning(true)
-        setTimeout(goToNextSet, 1000)
+        if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current)
+        transitionTimeoutRef.current = setTimeout(goToNextSet, 1000)
       }
     }
-  }
+  }, [duration, isTransitioning, goToNextSet])
 
-  const handleDuration = (d: number) => {
+  const handleDuration = useCallback((d: number) => {
     setDuration(d)
-  }
+  }, [])
 
-  const handleEnded = () => {
+  const handleEnded = useCallback(() => {
     if (!isTransitioning) {
       goToNextSet()
     }
-  }
+  }, [isTransitioning, goToNextSet])
 
-  const handleError = (error: any) => {
+  const handleError = useCallback((error: unknown) => {
     console.log('Stream error:', error)
     setStreamError(true)
-    setTimeout(goToNextSet, 3000)
-  }
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
+    errorTimeoutRef.current = setTimeout(goToNextSet, 3000)
+  }, [goToNextSet])
 
-  const handleReady = () => {
-    setIsPlaying(true)
+  const handleReady = useCallback(() => {
     setStreamError(false)
-  }
+  }, [])
 
   if (streamError) {
     return (
@@ -261,14 +277,8 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
           onError={handleError}
           onReady={handleReady}
           key={currentSetIndex}
-          config={{
-            playerVars: {
-              autoplay: 1,
-              rel: 0,
-              showinfo: 0,
-              modestbranding: 1
-            }
-          }}
+          progressInterval={1000}
+          config={PLAYER_CONFIG}
         />
 
         {/* Swipe detection zone — bottom strip only, so play button in center is not blocked */}
@@ -324,3 +334,5 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
     </div>
   )
 })
+
+export const StreamPlayer = memo(StreamPlayerImpl)

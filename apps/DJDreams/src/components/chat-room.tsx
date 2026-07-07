@@ -54,7 +54,7 @@ interface ChatRoomProps {
   sendMessage: (message: string, nullifier: string, username: string) => Promise<ChatMessage | undefined>
 }
 
-export function ChatRoom({
+function ChatRoomComponent({
   nullifier, username, canWrite, sessionChecked,
   needsUsername, isUpgradingUsername, onUpgradeUsername, onVerified,
   messages, isLoading, isConnected, sendMessage,
@@ -62,11 +62,25 @@ export function ChatRoom({
   const [newMessage, setNewMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const isNearBottomRef = useRef(true)
+  const prevCountRef = useRef(0)
   const { toast } = useToast()
 
-  // Auto scroll to bottom when new messages arrive
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }
+
+  // Auto-scroll only when messages were added AND the user is already near the
+  // bottom. Smooth for a single new message; instant for bulk (poll refetch) to
+  // avoid smooth-scroll thrash on mobile.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const grew = messages.length - prevCountRef.current
+    prevCountRef.current = messages.length
+    if (grew <= 0 || !isNearBottomRef.current) return
+    messagesEndRef.current?.scrollIntoView({ behavior: grew === 1 ? 'smooth' : 'auto' })
   }, [messages])
 
   const handleSendMessage = async () => {
@@ -129,7 +143,12 @@ export function ChatRoom({
       </div>
 
       {/* Messages container */}
-      <div className="bg-black/20 border border-white/5 rounded-xl p-3 sm:p-4 h-64 sm:h-80 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleMessagesScroll}
+        aria-live="polite"
+        className="bg-black/20 border border-white/5 rounded-xl p-3 sm:p-4 h-64 sm:h-80 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
+      >
         {isLoading ? (
           <ChatSkeleton />
         ) : messages.length === 0 ? (
@@ -253,3 +272,5 @@ export function ChatRoom({
     </div>
   )
 }
+
+export const ChatRoom = memo(ChatRoomComponent)

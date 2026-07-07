@@ -2,7 +2,6 @@
 const nextConfig = {
   images: {
     domains: ['img.youtube.com', 'i.ytimg.com'],
-    unoptimized: true,
   },
   webpack: (config, { dev, isServer }) => {
     if (dev) {

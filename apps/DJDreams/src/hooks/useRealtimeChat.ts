@@ -9,28 +9,35 @@ const isLocalhost = typeof window !== 'undefined' && window.location.hostname ==
 // Realtime needs the browser Supabase client (anon key) and is disabled in dev.
 const realtimeAvailable = !!supabase && !isDevelopment && !isLocalhost
 
-// When realtime is unavailable (dev, or anon key not configured), polling is
-// the primary transport — poll frequently. Otherwise it's a rare fallback.
-const MIN_FETCH_INTERVAL = realtimeAvailable ? 5 * 60_000 : 15_000
+// Interval for the polling transport — used both when realtime is unavailable
+// (dev / no anon key) and as a fallback after realtime reconnects are exhausted.
+const POLL_INTERVAL = 15_000
+// Throttle for non-forced fetches (e.g. rapid visibility changes). When realtime
+// is the transport, ad-hoc refetches should be rare.
+const VISIBILITY_THROTTLE = realtimeAvailable ? 5 * 60_000 : POLL_INTERVAL
+const MAX_RECONNECT_ATTEMPTS = 3
 
 export function useRealtimeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
   const [pollConnected, setPollConnected] = useState(false)
+
   const channelRef = useRef<ReturnType<NonNullable<typeof supabase>['channel']> | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchTimeRef = useRef(0)
   const donorUserIdsRef = useRef<Set<string>>(new Set())
+  // Mirrors isConnected so the visibility listener can be bound once instead of
+  // re-binding every time the connection flips.
+  const isConnectedRef = useRef(false)
   const { toast } = useToast()
-
-  const MAX_RECONNECT_ATTEMPTS = 3
 
   const fetchMessages = useCallback(async (force = false) => {
     const now = Date.now()
 
-    if (!force && now - lastFetchTimeRef.current < MIN_FETCH_INTERVAL) {
+    if (!force && now - lastFetchTimeRef.current < VISIBILITY_THROTTLE) {
       return
     }
 
@@ -41,12 +48,13 @@ export function useRealtimeChat() {
 
       if (response.ok) {
         const msgs: ChatMessage[] = data.data?.messages || []
-        // Update donor set from server-enriched messages
+        // Refresh the donor set from server-enriched messages so realtime
+        // INSERTs (which lack the flag) can be decorated correctly.
         const newDonors = new Set<string>()
         msgs.forEach(m => { if (m.is_donor) newDonors.add(m.user_id) })
         donorUserIdsRef.current = newDonors
         setMessages(msgs)
-        if (!realtimeAvailable) {
+        if (pollIntervalRef.current) {
           setPollConnected(true)
         }
       }
@@ -54,6 +62,22 @@ export function useRealtimeChat() {
       console.error('Error fetching messages:', error)
     } finally {
       setIsLoading(false)
+    }
+  }, [])
+
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return
+    setPollConnected(true)
+    pollIntervalRef.current = setInterval(() => {
+      fetchMessages(true)
+    }, POLL_INTERVAL)
+  }, [fetchMessages])
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+      setPollConnected(false)
     }
   }, [])
 
@@ -100,14 +124,22 @@ export function useRealtimeChat() {
   }, [toast])
 
   const setupRealtimeSubscription = useCallback(() => {
-    if (isDevelopment || isLocalhost || !supabase) {
+    if (!realtimeAvailable || !supabase) {
       setIsConnected(false)
       return
     }
 
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
       setIsConnected(false)
+      startPolling()
       return
+    }
+
+    // Tear down any existing channel before re-subscribing so retries don't leak
+    // channels/sockets.
+    if (channelRef.current) {
+      channelRef.current.unsubscribe()
+      channelRef.current = null
     }
 
     const channel = supabase
@@ -134,6 +166,8 @@ export function useRealtimeChat() {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true)
           reconnectAttemptsRef.current = 0
+          // Realtime is healthy again — drop the fallback poll if it was running.
+          stopPolling()
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           setIsConnected(false)
           if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
@@ -142,12 +176,19 @@ export function useRealtimeChat() {
             reconnectTimeoutRef.current = setTimeout(() => {
               setupRealtimeSubscription()
             }, delay)
+          } else {
+            // Exhausted reconnects — fall back to polling so messages still flow.
+            startPolling()
           }
         }
       })
 
     channelRef.current = channel
-  }, [])
+  }, [startPolling, stopPolling])
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected
+  }, [isConnected])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -155,7 +196,7 @@ export function useRealtimeChat() {
         // Always refetch on visibility change to catch missed messages
         fetchMessages(true)
 
-        if (!isConnected && supabase && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        if (!isConnectedRef.current && realtimeAvailable && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           setupRealtimeSubscription()
         }
       }
@@ -163,44 +204,38 @@ export function useRealtimeChat() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [isConnected, setupRealtimeSubscription, fetchMessages])
+  }, [fetchMessages, setupRealtimeSubscription])
 
   useEffect(() => {
     fetchMessages(true)
 
     if (realtimeAvailable) {
       setupRealtimeSubscription()
-    }
-
-    // Without realtime, polling is the only way messages arrive
-    let pollInterval: NodeJS.Timeout | undefined
-    if (!realtimeAvailable) {
-      pollInterval = setInterval(() => fetchMessages(), MIN_FETCH_INTERVAL)
+    } else {
+      // Without realtime, polling is the only way messages arrive.
+      startPolling()
     }
 
     return () => {
       if (channelRef.current) {
         channelRef.current.unsubscribe()
+        channelRef.current = null
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
-      if (pollInterval) {
-        clearInterval(pollInterval)
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
       }
     }
-  }, [])
+  }, [fetchMessages, setupRealtimeSubscription, startPolling])
 
   return {
     messages,
     isLoading,
     isEmpty: !isLoading && messages.length === 0,
-    isConnected: isDevelopment || isLocalhost
-      ? false
-      : realtimeAvailable
-        ? isConnected
-        : pollConnected,
+    isConnected: realtimeAvailable ? isConnected : pollConnected,
     sendMessage,
-    refetchMessages: fetchMessages
   }
 }
