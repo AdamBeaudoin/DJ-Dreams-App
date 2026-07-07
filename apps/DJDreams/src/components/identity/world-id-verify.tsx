@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import { IDKitRequestWidget } from '@worldcoin/idkit'
 import { deviceLegacy, type IDKitResult, type RpContext } from '@worldcoin/idkit'
 import { Button } from '@/components/ui/button'
@@ -181,18 +182,18 @@ export function WorldIdVerify({ onVerified, fullWidth = false }: WorldIdVerifyPr
       <Button
         onClick={fetchRpContext}
         disabled={isLoading}
-        className={`bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]${fullWidth ? ' w-full' : ''}`}
+        className={`bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-sm font-medium px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]${fullWidth ? ' w-full' : ''}`}
       >
         {isLoading ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <Spinner size="sm" />
-            <span className="hidden sm:inline">Loading...</span>
+            <span>Verifying…</span>
           </div>
         ) : (
-          <>
-            <span className="hidden sm:inline">Verify with World ID</span>
-            <span className="sm:hidden">Verify</span>
-          </>
+          <div className="flex items-center justify-center gap-1.5">
+            <ShieldCheck className="h-4 w-4" />
+            <span>Verify you are human</span>
+          </div>
         )}
       </Button>
 

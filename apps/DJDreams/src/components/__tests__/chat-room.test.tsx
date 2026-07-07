@@ -58,7 +58,7 @@ describe('ChatRoom states', () => {
         isLoading={false}
       />
     )
-    expect(screen.getByText('Verify with World ID to join the chat')).toBeInTheDocument()
+    expect(screen.getByText('Verify you are human to join the chat')).toBeInTheDocument()
   })
 
   it('shows checking session before verify CTA appears', () => {
@@ -87,7 +87,7 @@ describe('ChatRoom states', () => {
         isLoading={false}
       />
     )
-    expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
+    expect(screen.getByPlaceholderText('Verify you are human to chat')).toBeDisabled()
     expect(screen.getByTestId('world-id-verify')).toBeInTheDocument()
   })
 
@@ -102,7 +102,7 @@ describe('ChatRoom states', () => {
         isLoading={false}
       />
     )
-    expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
+    expect(screen.getByPlaceholderText('Verify you are human to chat')).toBeDisabled()
     expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
   })
 
@@ -120,7 +120,7 @@ describe('ChatRoom states', () => {
         isLoading={false}
       />
     )
-    const btn = screen.getByRole('button', { name: 'Set your username' })
+    const btn = screen.getByRole('button', { name: 'Connect username' })
     expect(btn).toBeInTheDocument()
     btn.click()
     expect(onUpgradeUsername).toHaveBeenCalledTimes(1)

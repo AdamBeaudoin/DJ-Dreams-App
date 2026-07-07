@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, memo } from 'react'
+import { ShieldCheck, AtSign } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -112,14 +113,6 @@ export function ChatRoom({
 
   const needsVerify = sessionChecked && !canWrite
 
-  // #region agent log
-  useEffect(() => {
-    if (typeof fetch === 'undefined') return
-    fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'797957'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta-v2',hypothesisId:'H',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading},timestamp:Date.now()})}).catch(()=>{});
-    fetch('/api/debug/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta-v2',hypothesisId:'H',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading}})}).catch(()=>{});
-  }, [canWrite, sessionChecked, needsVerify, messages.length, isLoading])
-  // #endregion
-
   return (
     <div id="chat-room" className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-md p-3 sm:p-5 shadow-card">
       <div className="mb-4 min-w-0">
@@ -169,42 +162,52 @@ export function ChatRoom({
         {needsVerify && (
           <div
             id="verify-cta"
-            className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3 scroll-mt-24"
+            className="mb-3 rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/[0.12] to-primary/[0.04] p-3.5 scroll-mt-24"
           >
-            <p className="text-xs text-muted-foreground text-center mb-2">
-              Verify with World ID to join the live chat
-            </p>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <p className="text-xs text-muted-foreground leading-snug">
+                One quick check keeps the chat human-only.
+              </p>
+            </div>
             <WorldIdVerify onVerified={onVerified} fullWidth />
           </div>
         )}
         {sessionChecked && canWrite && needsUsername && (
-          <div className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
-            <p className="text-xs text-muted-foreground text-center mb-2">
-              You&apos;re chatting as <span className="text-foreground/80">{username}</span>. Connect
-              your World App username to show your name.
-            </p>
+          <div className="mb-3 rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/[0.12] to-primary/[0.04] p-3.5">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <AtSign className="h-4 w-4" />
+              </div>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Chatting as <span className="text-foreground/80 font-medium">{username}</span>. Show your real name?
+              </p>
+            </div>
             <Button
               onClick={onUpgradeUsername}
               disabled={isUpgradingUsername}
-              className="w-full bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
+              className="w-full bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-sm font-medium min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
             >
               {isUpgradingUsername ? (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <Spinner size="sm" />
                   <span>Connecting…</span>
                 </div>
               ) : (
-                'Set your username'
+                'Connect username'
               )}
             </Button>
           </div>
         )}
         {sessionChecked && canWrite && !needsUsername && (
           <div
-            className="mb-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-muted-foreground"
+            className="mb-3 flex items-center justify-center gap-1.5 rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-1.5 text-center text-[11px] text-muted-foreground"
             role="status"
           >
-            Signed in as <span className="text-cyan-400/80 font-medium">{username || 'verified user'}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/70 shadow-[0_0_6px_rgba(34,211,238,0.6)]" />
+            Signed in as <span className="text-cyan-400/90 font-medium">{username || 'verified user'}</span>
           </div>
         )}
 
@@ -212,7 +215,7 @@ export function ChatRoom({
         <div className="flex gap-2">
         <Input
           type="text"
-          placeholder={!canWrite ? "Verify with World ID to chat" : "Type your message…"}
+          placeholder={!canWrite ? "Verify you are human to chat" : "Type your message…"}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyDown}

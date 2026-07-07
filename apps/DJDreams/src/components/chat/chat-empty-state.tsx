@@ -21,7 +21,7 @@ export function ChatEmptyState({ isVerified }: ChatEmptyStateProps) {
       <p className="text-xs text-muted-foreground/70 mt-1 max-w-[14rem]">
         {isVerified
           ? 'Be the first to say something!'
-          : 'Verify with World ID to join the chat'}
+          : 'Verify you are human to join the chat'}
       </p>
     </div>
   )

@@ -90,35 +90,6 @@ export default function HomePage() {
     }
   }, [])
 
-  // #region agent log
-  useEffect(() => {
-    if (typeof fetch === 'undefined') return
-    const payload = {
-      sessionId: '797957',
-      runId: 'session-sync-v2',
-      hypothesisId: 'H',
-      location: 'page.tsx:session-state',
-      message: 'client session state',
-      data: {
-        sessionChecked,
-        canWrite,
-        hasNullifier: nullifier !== null,
-        isFallbackName: !!username && isFallbackUsername(username),
-      },
-    }
-    fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '797957' },
-      body: JSON.stringify({ ...payload, timestamp: Date.now() }),
-    }).catch(() => {})
-    fetch('/api/debug/client-log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {})
-  }, [sessionChecked, canWrite, nullifier])
-  // #endregion
-
   // Recover a real World App username for an already-verified session that is
   // still on the "Human #xxxxxx" fallback. This is the ONLY reliable path:
   // walletAuth (SIWE) proves a wallet address, which the server resolves to a
@@ -131,27 +102,6 @@ export default function HomePage() {
     setIsUpgradingName(true)
     try {
       const result = await upgradeSessionWithWalletAuth(nullifier)
-
-      // #region agent log
-      const logPayload = {
-        sessionId: '797957',
-        runId: 'username-upgrade',
-        hypothesisId: 'I',
-        location: 'page.tsx:handleUpgradeUsername',
-        message: 'walletAuth upgrade result',
-        data: { status: result.status, gotUsername: !!result.username },
-      }
-      fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '797957' },
-        body: JSON.stringify({ ...logPayload, timestamp: Date.now() }),
-      }).catch(() => {})
-      fetch('/api/debug/client-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(logPayload),
-      }).catch(() => {})
-      // #endregion
 
       switch (result.status) {
         case 'ok':

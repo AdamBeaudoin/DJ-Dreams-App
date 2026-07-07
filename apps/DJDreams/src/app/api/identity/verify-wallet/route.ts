@@ -96,21 +96,6 @@ export async function POST(req: NextRequest) {
     const resolved = await resolveUsernameByAddress(walletAddress)
     const finalUsername = resolved ?? sanitizeUsername(username) ?? session.username
 
-    // #region agent log
-    console.log('[debug-797957]', JSON.stringify({
-      sessionId: '797957',
-      runId: 'verify-wallet',
-      hypothesisId: 'I',
-      location: 'verify-wallet/route.ts',
-      message: 'resolved username from wallet',
-      data: {
-        resolvedFromService: !!resolved,
-        gotClientHint: !!sanitizeUsername(username),
-        finalIsFallback: /^Human #[0-9a-fA-F]{6}$/.test(finalUsername),
-      },
-    }))
-    // #endregion
-
     // Prefer the wallet+username update (needs migration 003). If the column is
     // missing, fall back to a username-only update so the real username still
     // reaches chat — the wallet address is secondary.
