@@ -55,6 +55,18 @@ export const DJ_SETS: DJSet[] = [
   {
     url: 'https://www.youtube.com/watch?v=pOTkCgkxqyg',
     title: 'Nirvana - MTV Unplugged in New York'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=6RjJFoGt0y4',
+    title: 'VTSS | HÖR Berlin'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=nKHpbiYCtDQ',
+    title: 'Peggy Gou | Boiler Room x Dekmantel Amsterdam'
+  },
+  {
+    url: 'https://www.youtube.com/watch?v=RvRhUHTV_8k',
+    title: 'Ben Böhmer live above Cappadocia for Cercle'
   }
 ]
 

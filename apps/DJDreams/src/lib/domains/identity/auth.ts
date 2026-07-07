@@ -35,16 +35,6 @@ export function getSessionToken(): string | null {
   return cookieStore.get(SESSION_COOKIE)?.value ?? null
 }
 
-/**
- * Clear the session cookie (for logout).
- */
-export function clearSessionCookie(response: NextResponse): void {
-  response.cookies.set(SESSION_COOKIE, '', {
-    ...BASE_COOKIE_OPTIONS,
-    maxAge: 0,
-  })
-}
-
 type AuthResult =
   | { session: VerifiedSession; error?: never }
   | { session?: never; error: NextResponse }
