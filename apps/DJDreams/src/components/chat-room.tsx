@@ -25,11 +25,11 @@ const ChatMessageItem = memo(function ChatMessageItem({
   return (
     <div className="flex flex-col gap-1 animate-fade-in">
       <div className="flex items-center gap-2 text-xs">
-        {message.is_donor && <span className="text-amber-400 text-[10px]" title="Donor">◆</span>}
+        {message.is_donor && <span className="text-accent text-[10px]" title="Donor">◆</span>}
         <span className="font-medium text-foreground/90">{displayName}</span>
         <span className="text-muted-foreground">{formatTime(message.created_at)}</span>
       </div>
-      <div className={`text-foreground text-sm bg-white/[0.06] border border-white/10 rounded-xl rounded-tl-sm px-3 py-2 ml-4 break-words leading-relaxed transition-colors hover:bg-white/[0.09]${message.is_donor ? ' border-l-2 border-l-amber-400/70' : ''}`}>
+      <div className={`text-foreground text-sm bg-white/[0.06] border border-white/10 rounded-xl rounded-tl-sm px-3 py-2 ml-4 break-words leading-relaxed transition-colors hover:bg-white/[0.09]${message.is_donor ? ' border-l-2 border-l-accent/70 shadow-glow-purple' : ''}`}>
         {message.message}
       </div>
     </div>
@@ -137,7 +137,7 @@ function ChatRoomComponent({
             role="status"
             aria-label={isConnected ? 'Chat connected' : 'Chat disconnected'}
             title={isConnected ? 'Connected' : 'Disconnected'}
-            className={`w-2 h-2 rounded-full shrink-0 ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
+            className={`w-2 h-2 rounded-full shrink-0 ${isConnected ? 'bg-primary shadow-glow animate-pulse-soft' : 'bg-red-400'}`}
           />
         </h3>
       </div>
@@ -147,7 +147,7 @@ function ChatRoomComponent({
         ref={messagesContainerRef}
         onScroll={handleMessagesScroll}
         aria-live="polite"
-        className="bg-black/20 border border-white/5 rounded-xl p-3 sm:p-4 h-64 sm:h-80 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
+        className="bg-black/20 border border-white/5 rounded-xl p-3 sm:p-4 h-[40dvh] sm:h-80 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
       >
         {isLoading ? (
           <ChatSkeleton />
@@ -223,11 +223,11 @@ function ChatRoomComponent({
         )}
         {sessionChecked && canWrite && !needsUsername && (
           <div
-            className="mb-3 flex items-center justify-center gap-1.5 rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-1.5 text-center text-[11px] text-muted-foreground"
+            className="mb-3 flex items-center justify-center gap-1.5 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-center text-[11px] text-muted-foreground"
             role="status"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/70 shadow-[0_0_6px_rgba(34,211,238,0.6)]" />
-            Signed in as <span className="text-cyan-400/90 font-medium">{username || 'verified user'}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-primary/70 shadow-glow" />
+            Signed in as <span className="text-primary/90 font-medium">{username || 'verified user'}</span>
           </div>
         )}
 
@@ -260,7 +260,7 @@ function ChatRoomComponent({
         {/* Status messages */}
         {!isConnected && (
           <div className="mt-2 text-[10px] text-red-400/70 flex items-center gap-1.5 uppercase tracking-wider">
-            <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse-soft" />
             Offline
           </div>
         )}
@@ -268,7 +268,7 @@ function ChatRoomComponent({
 
       {canWrite && (
         <div className="mt-2 text-[10px] text-white/30 uppercase tracking-wider sm:block hidden">
-          <span className="text-cyan-400/50">{username}</span>
+          <span className="text-primary/50">{username}</span>
         </div>
       )}
     </div>
