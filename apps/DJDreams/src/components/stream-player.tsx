@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo } from 'react'
 import dynamic from 'next/dynamic'
-import { DJ_SETS, ROTATION_INTERVAL, getCurrentSetIndex } from '@/lib/domains/playback/playlist'
-import { canSkip, incrementSkipCount } from '@/lib/skip-counter'
+import { usePlaylist } from '@/hooks/usePlaylist'
+import { useLandscapeSwipe } from '@/hooks/useLandscapeSwipe'
 
 const ReactPlayer = dynamic(() => import('react-player/youtube'), {
   ssr: false,
@@ -16,10 +16,6 @@ const ReactPlayer = dynamic(() => import('react-player/youtube'), {
     </div>
   )
 })
-
-const SWIPE_THRESHOLD = 60
-const MAX_HISTORY = 10
-const CONTROLS_TIMEOUT = 3000
 
 const PLAYER_CONFIG = {
   playerVars: {
@@ -44,8 +40,20 @@ export interface StreamPlayerHandle {
 
 const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
   function StreamPlayer({ onLandscapeChange, isDonor = false, onSkipBlocked }, ref) {
+  const { index, currentSet, goNext, goPrevious } = usePlaylist()
+  const {
+    effectiveLandscape,
+    showControls,
+    exitFullscreen,
+    handlePlayerTap,
+    handleExitFullscreen,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useLandscapeSwipe({ isDonor, onSkipBlocked, goNext, goPrevious })
+
+  // Per-set player-view state. Reset whenever the playlist index changes.
   const [streamError, setStreamError] = useState(false)
-  const [currentSetIndex, setCurrentSetIndex] = useState(0)
   const [duration, setDuration] = useState(0)
   const [played, setPlayed] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -58,142 +66,25 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
   // once per 1% instead of on every progress tick.
   const displayedPercentRef = useRef(0)
 
-  // Landscape fullscreen state
-  const [isLandscape, setIsLandscape] = useState(false)
-  const [forcePortrait, setForcePortrait] = useState(false)
-  const [showControls, setShowControls] = useState(false)
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Swipe state
-  const historyStack = useRef<number[]>([])
-  const touchStartX = useRef(0)
-  const touchStartY = useRef(0)
-
-  const playerRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const effectiveLandscape = isLandscape && !forcePortrait
-
-  // --- Imperative handle ---
-
-  // --- Navigation ---
-
-  const goToNextSet = useCallback(() => {
-    setCurrentSetIndex(prev => {
-      historyStack.current.push(prev)
-      if (historyStack.current.length > MAX_HISTORY) historyStack.current.shift()
-      return (prev + 1) % DJ_SETS.length
-    })
-    setStreamError(false)
-    setIsTransitioning(false)
-    setPlayed(0)
-    displayedPercentRef.current = 0
-  }, [])
-
-  const goToPreviousSet = useCallback(() => {
-    if (historyStack.current.length === 0) return
-    const prevIndex = historyStack.current.pop()!
-    setCurrentSetIndex(prevIndex)
-    setStreamError(false)
-    setIsTransitioning(false)
-    setPlayed(0)
-    displayedPercentRef.current = 0
-  }, [])
-
   useImperativeHandle(ref, () => ({
-    exitFullscreen() {
-      setForcePortrait(true)
-      setShowControls(false)
-    },
-    nextSet: goToNextSet,
-    previousSet: goToPreviousSet,
-  }), [goToNextSet, goToPreviousSet])
-
-  // --- Orientation detection ---
-
-  useEffect(() => {
-    const mql = window.matchMedia('(orientation: landscape)')
-    const handler = (e: MediaQueryListEvent) => {
-      setIsLandscape(e.matches)
-      setForcePortrait(false)
-    }
-    setIsLandscape(mql.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [])
+    exitFullscreen,
+    nextSet: goNext,
+    previousSet: goPrevious,
+  }), [exitFullscreen, goNext, goPrevious])
 
   useEffect(() => {
     onLandscapeChange?.(effectiveLandscape)
   }, [effectiveLandscape, onLandscapeChange])
 
-  // --- Landscape controls overlay ---
-
-  const handlePlayerTap = useCallback(() => {
-    if (!effectiveLandscape) return
-    setShowControls(true)
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current)
-    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), CONTROLS_TIMEOUT)
-  }, [effectiveLandscape])
-
-  const handleExitFullscreen = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setForcePortrait(true)
-    setShowControls(false)
-  }, [])
-
+  // Reset per-set view state whenever the active set changes.
   useEffect(() => {
-    return () => {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current)
-    }
-  }, [])
-
-  // --- Swipe handling ---
-
-  const isSwiping = useRef(false)
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX
-    touchStartY.current = e.touches[0].clientY
-    isSwiping.current = false
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    const deltaX = Math.abs(e.touches[0].clientX - touchStartX.current)
-    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current)
-    if (deltaX > 10 && deltaX > deltaY) {
-      isSwiping.current = true
-    }
-  }, [])
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    const deltaX = e.changedTouches[0].clientX - touchStartX.current
-    const deltaY = e.changedTouches[0].clientY - touchStartY.current
-
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY) * 2) {
-      if (deltaX < 0) {
-        if (!canSkip(isDonor)) {
-          onSkipBlocked?.()
-          return
-        }
-        incrementSkipCount()
-        goToNextSet()
-      } else {
-        if (!isDonor) {
-          onSkipBlocked?.()
-          return
-        }
-        goToPreviousSet()
-      }
-    }
-  }, [goToNextSet, goToPreviousSet, isDonor, onSkipBlocked])
-
-  // --- Playback lifecycle ---
-
-  useEffect(() => {
-    setCurrentSetIndex(getCurrentSetIndex())
-    const interval = setInterval(goToNextSet, ROTATION_INTERVAL)
-    return () => clearInterval(interval)
-  }, [goToNextSet])
+    setStreamError(false)
+    setPlayed(0)
+    setIsTransitioning(false)
+    displayedPercentRef.current = 0
+  }, [index])
 
   // Clear any pending advance/recover timers on unmount.
   useEffect(() => {
@@ -216,10 +107,10 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
       if (remainingTime <= 10 || state.played >= 0.98) {
         setIsTransitioning(true)
         if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current)
-        transitionTimeoutRef.current = setTimeout(goToNextSet, 1000)
+        transitionTimeoutRef.current = setTimeout(goNext, 1000)
       }
     }
-  }, [duration, isTransitioning, goToNextSet])
+  }, [duration, isTransitioning, goNext])
 
   const handleDuration = useCallback((d: number) => {
     setDuration(d)
@@ -227,16 +118,16 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
 
   const handleEnded = useCallback(() => {
     if (!isTransitioning) {
-      goToNextSet()
+      goNext()
     }
-  }, [isTransitioning, goToNextSet])
+  }, [isTransitioning, goNext])
 
   const handleError = useCallback((error: unknown) => {
     console.log('Stream error:', error)
     setStreamError(true)
     if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
-    errorTimeoutRef.current = setTimeout(goToNextSet, 3000)
-  }, [goToNextSet])
+    errorTimeoutRef.current = setTimeout(goNext, 3000)
+  }, [goNext])
 
   const handleReady = useCallback(() => {
     setStreamError(false)
@@ -266,7 +157,7 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
         onClick={handlePlayerTap}
       >
         <ReactPlayer
-          url={DJ_SETS[currentSetIndex].url}
+          url={currentSet.url}
           width="100%"
           height="100%"
           playing={true}
@@ -276,7 +167,7 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
           onEnded={handleEnded}
           onError={handleError}
           onReady={handleReady}
-          key={currentSetIndex}
+          key={index}
           progressInterval={1000}
           config={PLAYER_CONFIG}
         />
@@ -319,7 +210,7 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
           <div className="flex items-center justify-between text-white">
             <div className="flex-1 min-w-0">
               <h3 className="text-sm sm:text-lg font-semibold mb-1 truncate">
-                {DJ_SETS[currentSetIndex].title}
+                {currentSet.title}
               </h3>
               <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
                 <span className="flex items-center gap-1">
