@@ -13,6 +13,9 @@ const baseProps = {
   username: 'tester',
   canWrite: true,
   sessionChecked: true,
+  needsUsername: false,
+  isUpgradingUsername: false,
+  onUpgradeUsername: jest.fn(),
   onVerified: jest.fn(),
   isConnected: true,
   sendMessage: jest.fn(),
@@ -101,6 +104,27 @@ describe('ChatRoom states', () => {
     )
     expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
     expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
+  })
+
+  it('shows a Set-your-username button when signed in with a fallback name', () => {
+    const onUpgradeUsername = jest.fn()
+    render(
+      <ChatRoom
+        {...baseProps}
+        canWrite={true}
+        sessionChecked={true}
+        needsUsername={true}
+        username="Human #abc123"
+        onUpgradeUsername={onUpgradeUsername}
+        messages={[]}
+        isLoading={false}
+      />
+    )
+    const btn = screen.getByRole('button', { name: 'Set your username' })
+    expect(btn).toBeInTheDocument()
+    btn.click()
+    expect(onUpgradeUsername).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument()
   })
 
   it('hides verify CTA once the server confirms a session', () => {

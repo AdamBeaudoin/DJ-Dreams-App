@@ -42,6 +42,10 @@ interface ChatRoomProps {
   canWrite: boolean
   /** False until GET /api/identity/session has completed on mount. */
   sessionChecked: boolean
+  /** Signed in, but still on a "Human #xxxxxx" fallback name — offer walletAuth upgrade. */
+  needsUsername: boolean
+  isUpgradingUsername: boolean
+  onUpgradeUsername: () => void
   onVerified: (nullifier: string, username: string) => void
   messages: ChatMessage[]
   isLoading: boolean
@@ -50,7 +54,8 @@ interface ChatRoomProps {
 }
 
 export function ChatRoom({
-  nullifier, username, canWrite, sessionChecked, onVerified,
+  nullifier, username, canWrite, sessionChecked,
+  needsUsername, isUpgradingUsername, onUpgradeUsername, onVerified,
   messages, isLoading, isConnected, sendMessage,
 }: ChatRoomProps) {
   const [newMessage, setNewMessage] = useState('')
@@ -172,7 +177,29 @@ export function ChatRoom({
             <WorldIdVerify onVerified={onVerified} fullWidth />
           </div>
         )}
-        {sessionChecked && canWrite && (
+        {sessionChecked && canWrite && needsUsername && (
+          <div className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
+            <p className="text-xs text-muted-foreground text-center mb-2">
+              You&apos;re chatting as <span className="text-foreground/80">{username}</span>. Connect
+              your World App username to show your name.
+            </p>
+            <Button
+              onClick={onUpgradeUsername}
+              disabled={isUpgradingUsername}
+              className="w-full bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
+            >
+              {isUpgradingUsername ? (
+                <div className="flex items-center gap-1">
+                  <Spinner size="sm" />
+                  <span>Connecting…</span>
+                </div>
+              ) : (
+                'Set your username'
+              )}
+            </Button>
+          </div>
+        )}
+        {sessionChecked && canWrite && !needsUsername && (
           <div
             className="mb-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-muted-foreground"
             role="status"

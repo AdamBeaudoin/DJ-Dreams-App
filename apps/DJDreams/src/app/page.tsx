@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { ToastAction } from '@/components/ui/toast'
 import type { PayCommandInput } from '@worldcoin/minikit-js'
 import { isFallbackUsername } from '@/lib/domains/identity/username'
-import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
+import { upgradeSessionWithWalletAuth } from '@/lib/domains/identity/wallet-auth-client'
 import { env } from '@/lib/env'
 
 const STORAGE_KEY = 'dj-dreams-session'
@@ -20,6 +20,7 @@ export default function HomePage() {
   const [username, setUsername] = useState('')
   /** False until GET /api/identity/session completes — never trust localStorage alone for write access. */
   const [sessionChecked, setSessionChecked] = useState(false)
+  const [isUpgradingName, setIsUpgradingName] = useState(false)
   const [isLandscape, setIsLandscape] = useState(false)
   const [isDonor, setIsDonor] = useState(false)
   const { toast } = useToast()
@@ -98,7 +99,12 @@ export default function HomePage() {
       hypothesisId: 'H',
       location: 'page.tsx:session-state',
       message: 'client session state',
-      data: { sessionChecked, canWrite, hasNullifier: nullifier !== null },
+      data: {
+        sessionChecked,
+        canWrite,
+        hasNullifier: nullifier !== null,
+        isFallbackName: !!username && isFallbackUsername(username),
+      },
     }
     fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb', {
       method: 'POST',
@@ -113,40 +119,90 @@ export default function HomePage() {
   }, [sessionChecked, canWrite, nullifier])
   // #endregion
 
-  // Refresh fallback usernames from World App when a session already exists
-  useEffect(() => {
-    if (!nullifier || !username || !isFallbackUsername(username)) return
+  // Recover a real World App username for an already-verified session that is
+  // still on the "Human #xxxxxx" fallback. This is the ONLY reliable path:
+  // walletAuth (SIWE) proves a wallet address, which the server resolves to a
+  // username authoritatively. It is button-driven (never auto-prompts) so the
+  // user always has an explicit sign-in affordance and is never silently stuck.
+  const needsUsername = canWrite && isFallbackUsername(username)
 
-    let cancelled = false
+  const handleUpgradeUsername = useCallback(async () => {
+    if (!nullifier || isUpgradingName) return
+    setIsUpgradingName(true)
+    try {
+      const result = await upgradeSessionWithWalletAuth(nullifier)
 
-    resolveWorldAppUsername().then(async (worldUsername) => {
-      if (cancelled || !worldUsername || worldUsername === username) return
+      // #region agent log
+      const logPayload = {
+        sessionId: '797957',
+        runId: 'username-upgrade',
+        hypothesisId: 'I',
+        location: 'page.tsx:handleUpgradeUsername',
+        message: 'walletAuth upgrade result',
+        data: { status: result.status, gotUsername: !!result.username },
+      }
+      fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '797957' },
+        body: JSON.stringify({ ...logPayload, timestamp: Date.now() }),
+      }).catch(() => {})
+      fetch('/api/debug/client-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logPayload),
+      }).catch(() => {})
+      // #endregion
 
-      try {
-        const res = await fetch('/api/identity/session', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: worldUsername }),
-        })
-
-        if (!res.ok) return
-
-        const data = await res.json()
-        const updatedUsername = data.data?.username
-        if (!updatedUsername || cancelled) return
-
-        setUsername(updatedUsername)
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ nullifier, username: updatedUsername })
-        )
-      } catch {}
-    })
-
-    return () => {
-      cancelled = true
+      switch (result.status) {
+        case 'ok':
+          if (result.username) {
+            setUsername(result.username)
+            try {
+              localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({ nullifier, username: result.username })
+              )
+            } catch {}
+            toast({
+              title: 'Username connected',
+              description: `You're now chatting as ${result.username}.`,
+            })
+          } else {
+            toast({
+              title: 'Signed in',
+              description: 'Your World App username will appear shortly.',
+            })
+          }
+          break
+        case 'unavailable':
+          toast({
+            title: 'Open in World App',
+            description: 'Connect your username from inside World App.',
+            variant: 'destructive',
+          })
+          break
+        case 'rejected':
+          toast({
+            title: 'Sign-in cancelled',
+            description: 'Approve the wallet sign-in to show your username.',
+          })
+          break
+        case 'error':
+          toast({
+            title: 'Could not connect username',
+            description: 'Something went wrong. Please try again.',
+            variant: 'destructive',
+          })
+          break
+        default: {
+          const _exhaustive: never = result.status
+          return _exhaustive
+        }
+      }
+    } finally {
+      setIsUpgradingName(false)
     }
-  }, [nullifier, username])
+  }, [nullifier, isUpgradingName, toast])
 
   // Fetch donor status on mount and when nullifier changes
   useEffect(() => {
@@ -337,6 +393,9 @@ export default function HomePage() {
           username={username}
           canWrite={canWrite}
           sessionChecked={sessionChecked}
+          needsUsername={needsUsername}
+          isUpgradingUsername={isUpgradingName}
+          onUpgradeUsername={handleUpgradeUsername}
           onVerified={handleVerified}
           messages={messages}
           isLoading={isLoading}
