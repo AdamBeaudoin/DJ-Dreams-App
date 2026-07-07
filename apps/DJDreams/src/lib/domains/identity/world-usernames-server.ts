@@ -9,7 +9,7 @@ const WORLD_USERNAMES_BASE_URL = 'https://usernames.worldcoin.org'
 
 /**
  * Resolve a World App username from a wallet address using World's public
- * usernames service (`GET /api/v1/usernames/:address`).
+ * usernames service (`GET /api/v1/{address}`).
  *
  * Server-side only. Used after SIWE verification in `/api/identity/verify-wallet`
  * so the session username is resolved authoritatively from the SIWE-verified
@@ -24,10 +24,8 @@ export async function resolveUsernameByAddress(address: string): Promise<string 
   if (!address) return null
 
   try {
-    const res = await fetch(
-      `${WORLD_USERNAMES_BASE_URL}/api/v1/usernames/${address}`,
-      { headers: { Accept: 'application/json' } }
-    )
+    const url = `${WORLD_USERNAMES_BASE_URL}/api/v1/${address}`
+    const res = await fetch(url, { headers: { Accept: 'application/json' } })
     if (!res.ok) return null
 
     const data = (await res.json()) as unknown

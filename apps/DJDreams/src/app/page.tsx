@@ -29,17 +29,6 @@ export default function HomePage() {
     setIsLandscape(landscape)
   }, [])
 
-  const handleMiniChatTap = useCallback(() => {
-    if (isLandscape) {
-      streamPlayerRef.current?.exitFullscreen()
-      setTimeout(() => {
-        document.getElementById('chat-room')?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    } else {
-      document.getElementById('chat-room')?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [isLandscape])
-
   // Restore + sync session: read localStorage for an instant first paint, then
   // ask the server for the authoritative session. If the cookie is gone/expired
   // the server returns 401/403 and we drop the stale local session so the UI
@@ -303,8 +292,6 @@ export default function HomePage() {
           <StreamPlayer
             ref={streamPlayerRef}
             onLandscapeChange={handleLandscapeChange}
-            messages={messages}
-            onMiniChatTap={handleMiniChatTap}
             isDonor={isDonor}
             onSkipBlocked={handleSkipBlocked}
           />

@@ -35,7 +35,7 @@ describe('resolveUsernameByAddress', () => {
     const result = await resolveUsernameByAddress('0xWALLET')
     expect(result).toBe('alice_01')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://usernames.worldcoin.org/api/v1/usernames/0xWALLET',
+      'https://usernames.worldcoin.org/api/v1/0xWALLET',
       expect.objectContaining({ headers: { Accept: 'application/json' } })
     )
   })

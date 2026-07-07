@@ -4,8 +4,6 @@ import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHand
 import dynamic from 'next/dynamic'
 import { DJ_SETS, ROTATION_INTERVAL, getCurrentSetIndex } from '@/lib/domains/playback/playlist'
 import { canSkip, incrementSkipCount } from '@/lib/skip-counter'
-import { MiniChatOverlay } from '@/components/mini-chat-overlay'
-import type { ChatMessage } from '@/lib/domains/chat/types'
 
 const ReactPlayer = dynamic(() => import('react-player/youtube'), {
   ssr: false,
@@ -25,8 +23,6 @@ const CONTROLS_TIMEOUT = 3000
 
 interface StreamPlayerProps {
   onLandscapeChange?: (isLandscape: boolean) => void
-  messages?: ChatMessage[]
-  onMiniChatTap?: () => void
   isDonor?: boolean
   onSkipBlocked?: () => void
 }
@@ -38,7 +34,7 @@ export interface StreamPlayerHandle {
 }
 
 export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
-  function StreamPlayer({ onLandscapeChange, messages, onMiniChatTap, isDonor = false, onSkipBlocked }, ref) {
+  function StreamPlayer({ onLandscapeChange, isDonor = false, onSkipBlocked }, ref) {
   const [streamError, setStreamError] = useState(false)
   const [currentSetIndex, setCurrentSetIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -304,11 +300,6 @@ export const StreamPlayer = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
               ✕
             </button>
           </div>
-        )}
-
-        {/* Mini chat overlay */}
-        {messages && messages.length > 0 && onMiniChatTap && (
-          <MiniChatOverlay messages={messages} onTap={onMiniChatTap} />
         )}
 
         {/* Bottom info bar */}

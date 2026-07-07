@@ -85,7 +85,7 @@ so no extra env var is required.
 
 The username is resolved **server-side** in `/api/identity/verify-wallet` from
 the SIWE-verified `payload.address` via World's public usernames service
-(`GET https://usernames.worldcoin.org/api/v1/usernames/:address`, no auth). The
+(`GET https://usernames.worldcoin.org/api/v1/:address`, no auth). The
 client also resolves via `MiniKit.getUserByAddress(finalPayload.address)` as a
 hint, but the server's lookup is authoritative — it does not depend on
 `MiniKit.user` being populated. If the service has no record for the address or
