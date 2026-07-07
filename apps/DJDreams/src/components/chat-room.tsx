@@ -205,9 +205,10 @@ function ChatRoomComponent({
               </p>
             </div>
             <Button
+              variant="pill-primary"
               onClick={onUpgradeUsername}
               disabled={isUpgradingUsername}
-              className="w-full bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-sm font-medium min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
+              className="w-full text-sm font-medium"
             >
               {isUpgradingUsername ? (
                 <div className="flex items-center gap-1.5">
@@ -243,9 +244,10 @@ function ChatRoomComponent({
           maxLength={MAX_MESSAGE_LENGTH}
         />
         <Button
+          variant="pill-primary"
           onClick={handleSendMessage}
           disabled={!newMessage.trim() || !canWrite || isSending}
-          className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 hover:shadow-glow disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent px-4 sm:px-6 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
+          className="px-4 sm:px-6"
         >
           {isSending ? (
             <Spinner size="md" />

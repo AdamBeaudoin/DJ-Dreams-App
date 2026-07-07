@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { StreamPlayer, type StreamPlayerHandle } from '@/components/stream-player'
 import { ChatSection } from '@/components/chat-section'
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { ToastAction } from '@/components/ui/toast'
 import { useSession } from '@/hooks/useSession'
@@ -51,31 +52,30 @@ export function HomeClient({ brand }: HomeClientProps) {
         <header className="text-center mb-5 sm:mb-6">
           {brand}
           <div className="flex items-center justify-center gap-2 sm:gap-3">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => streamPlayerRef.current?.previousSet()}
-              className="px-4 py-1.5 rounded-full text-xs font-medium min-h-[44px] transition-all duration-200 touch-manipulation text-muted-foreground hover:text-foreground hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97]"
+              className="rounded-full min-h-[44px] px-4 text-xs font-medium text-muted-foreground touch-manipulation"
               aria-label="Previous set"
             >
               ‹ Prev
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="pill-primary"
               onClick={tip}
               disabled={isTipping}
-              className={`px-5 py-1.5 rounded-full text-xs font-semibold min-h-[44px] transition-all duration-200 touch-manipulation focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97] ${
-                !isTipping
-                  ? 'bg-primary/15 text-primary hover:bg-primary/25 hover:shadow-glow border border-primary/30'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed border border-transparent'
-              }`}
+              className="px-5 text-xs font-semibold"
             >
               {isTipping ? 'Sending…' : 'Tip the builder'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => streamPlayerRef.current?.nextSet()}
-              className="px-4 py-1.5 rounded-full text-xs font-medium min-h-[44px] transition-all duration-200 touch-manipulation text-muted-foreground hover:text-foreground hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97]"
+              className="rounded-full min-h-[44px] px-4 text-xs font-medium text-muted-foreground touch-manipulation"
               aria-label="Next set"
             >
               Next ›
-            </button>
+            </Button>
           </div>
         </header>
       </div>

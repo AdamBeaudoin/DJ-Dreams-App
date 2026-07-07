@@ -151,9 +151,10 @@ export function WorldIdVerify({ onVerified, fullWidth = false }: WorldIdVerifyPr
   return (
     <>
       <Button
+        variant="pill-primary"
         onClick={fetchRpContext}
         disabled={isLoading}
-        className={`bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-sm font-medium px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]${fullWidth ? ' w-full' : ''}`}
+        className={`text-sm font-medium${fullWidth ? ' w-full' : ''}`}
       >
         {isLoading ? (
           <div className="flex items-center gap-1.5">
