@@ -110,7 +110,8 @@ export function ChatRoom({
   // #region agent log
   useEffect(() => {
     if (typeof fetch === 'undefined') return
-    fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'797957'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta',hypothesisId:'G',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'797957'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta-v2',hypothesisId:'H',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading},timestamp:Date.now()})}).catch(()=>{});
+    fetch('/api/debug/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta-v2',hypothesisId:'H',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading}})}).catch(()=>{});
   }, [canWrite, sessionChecked, needsVerify, messages.length, isLoading])
   // #endregion
 
@@ -149,29 +150,39 @@ export function ChatRoom({
         )}
       </div>
 
-      {/* Verify CTA — below messages, above input; only after session check so it
-          doesn't flash then vanish when an existing cookie is found. Full-width on
-          mobile so iPhone mini can't clip it in the header row. */}
-      {!sessionChecked && (
-        <div
-          className="mb-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-center text-xs text-muted-foreground"
-          role="status"
-          aria-live="polite"
-        >
-          Checking session…
-        </div>
-      )}
-      {needsVerify && (
-        <div className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
-          <p className="text-xs text-muted-foreground text-center mb-2">
-            Verify with World ID to join the live chat
-          </p>
-          <WorldIdVerify onVerified={onVerified} fullWidth />
-        </div>
-      )}
+      {/* Auth state + input — sticky on mobile so the Verify CTA can't scroll off-screen on iPhone mini */}
+      <div className="sticky bottom-0 z-10 -mx-3 px-3 pt-2 pb-1 bg-gradient-to-t from-card via-card/95 to-transparent sm:static sm:mx-0 sm:px-0 sm:pt-0 sm:pb-0 sm:bg-transparent">
+        {!sessionChecked && (
+          <div
+            className="mb-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-center text-xs text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            Checking session…
+          </div>
+        )}
+        {needsVerify && (
+          <div
+            id="verify-cta"
+            className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3 scroll-mt-24"
+          >
+            <p className="text-xs text-muted-foreground text-center mb-2">
+              Verify with World ID to join the live chat
+            </p>
+            <WorldIdVerify onVerified={onVerified} fullWidth />
+          </div>
+        )}
+        {sessionChecked && canWrite && (
+          <div
+            className="mb-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-muted-foreground"
+            role="status"
+          >
+            Signed in as <span className="text-cyan-400/80 font-medium">{username || 'verified user'}</span>
+          </div>
+        )}
 
-      {/* Message input */}
-      <div className="flex gap-2">
+        {/* Message input */}
+        <div className="flex gap-2">
         <Input
           type="text"
           placeholder={!canWrite ? "Verify with World ID to chat" : "Type your message…"}
@@ -193,18 +204,19 @@ export function ChatRoom({
             'Send'
           )}
         </Button>
+        </div>
+
+        {/* Status messages */}
+        {!isConnected && (
+          <div className="mt-2 text-[10px] text-red-400/70 flex items-center gap-1.5 uppercase tracking-wider">
+            <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+            Offline
+          </div>
+        )}
       </div>
 
-      {/* Status messages */}
-      {!isConnected && (
-        <div className="mt-2 text-[10px] text-red-400/70 flex items-center gap-1.5 uppercase tracking-wider">
-          <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
-          Offline
-        </div>
-      )}
-
       {canWrite && (
-        <div className="mt-2 text-[10px] text-white/30 uppercase tracking-wider">
+        <div className="mt-2 text-[10px] text-white/30 uppercase tracking-wider sm:block hidden">
           <span className="text-cyan-400/50">{username}</span>
         </div>
       )}

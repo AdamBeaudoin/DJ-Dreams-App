@@ -109,12 +109,14 @@ describe('ChatRoom states', () => {
         {...baseProps}
         canWrite={true}
         sessionChecked={true}
+        username="realname"
         messages={[]}
         isLoading={false}
       />
     )
     expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
     expect(screen.queryByText('Checking session…')).not.toBeInTheDocument()
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('realname')
   })
 
   it('renders messages once loaded', async () => {
