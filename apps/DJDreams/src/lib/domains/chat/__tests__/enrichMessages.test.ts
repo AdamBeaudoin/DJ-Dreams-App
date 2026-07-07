@@ -77,13 +77,12 @@ describe('enrichMessagesWithDonorStatus', () => {
   })
 
   it('preserves all original message fields', async () => {
-    const original = makeMessage({ id: '1', user_id: 'user-a', is_boosted: true, is_moderated: true })
+    const original = makeMessage({ id: '1', user_id: 'user-a', is_moderated: true })
     mockGetDonorNullifiers.mockResolvedValueOnce(new Set(['user-a']))
 
     const [result] = await enrichMessagesWithDonorStatus([original])
 
     expect(result.id).toBe('1')
-    expect(result.is_boosted).toBe(true)
     expect(result.is_moderated).toBe(true)
     expect(result.is_donor).toBe(true)
   })

@@ -1,16 +1,10 @@
 import { signRequest } from '@worldcoin/idkit/signing'
+import { env } from '@/lib/env'
 import type { RpContextResponse } from './types'
 
 export function generateRpContext(action: string): RpContextResponse {
-  const signingKey = process.env.RP_SIGNING_KEY
-  const rpId = process.env.RP_ID
-
-  if (!signingKey) {
-    throw new Error('RP_SIGNING_KEY not configured')
-  }
-  if (!rpId) {
-    throw new Error('RP_ID not configured')
-  }
+  const signingKey = env.rpSigningKey()
+  const rpId = env.rpId()
 
   const { sig, nonce, createdAt, expiresAt } = signRequest({ signingKeyHex: signingKey, action })
 

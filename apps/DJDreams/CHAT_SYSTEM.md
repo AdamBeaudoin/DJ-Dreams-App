@@ -21,7 +21,8 @@
 ### ✅ Enhanced Security
 - **World ID Verification**: Only verified humans can send messages
 - **Message Validation**: Length limits, spam detection, caps lock detection
-- **User Identification**: Unique usernames based on World ID nullifier hash
+- **Usernames**: Real World App username via MiniKit Wallet Auth (SIWE); falls back to `Human #<nullifier-tail>` outside World App
+- **Server-Authoritative Identity**: Chat messages use the username bound to the session cookie, never a client-supplied value
 
 ## 🏗️ Architecture
 
@@ -31,11 +32,15 @@
 - **Real-Time Updates**: Supabase real-time subscriptions for instant message delivery
 
 ### Backend
-- **`/api/chat/send`**: Handles message sending with moderation
-- **`/api/chat/messages`**: Fetches message history
-- **`/api/verify`**: World ID verification (existing)
+- **`/api/chat/send`**: Handles message sending with moderation + per-nullifier rate limiting
+- **`/api/chat/messages`**: Fetches message history (donor status enriched server-side)
+- **`/api/identity/verify`**: World ID verify (creates verified session + cookie)
+- **`/api/identity/rp-context`**: RP-signed context for IDKit
+- **`/api/identity/nonce`** + **`/api/identity/verify-wallet`**: SIWE wallet auth (upgrades username)
+- **`/api/identity/session`**: GET syncs the authoritative session to the client; PATCH upgrades a fallback username
 
 ### Database Schema
+The `messages` table (see `supabase/migrations/001_full_schema.sql` and `004_drop_boost.sql`):
 ```sql
 CREATE TABLE messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -44,11 +49,12 @@ CREATE TABLE messages (
   message TEXT NOT NULL,
   verified BOOLEAN DEFAULT true,
   nullifier_hash TEXT,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  is_moderated BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  session_nullifier TEXT,
+  is_moderated BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
+Identity lives in `verified_sessions` (nullifier, username, session_token, wallet_address) and payments in `payment_references` (nullifier, purpose, used, transaction_id).
 
 ## 🛠️ Setup Instructions
 
@@ -96,7 +102,8 @@ In your Supabase dashboard:
 
 ### Performance
 - Message history limited to 50 recent messages
-- Real-time subscription with rate limiting (10 events/second)
+- Per-nullifier rate limiting on send (1 msg / 2s, max 5 / 10s) — see `src/lib/rate-limit.ts`
+- Polling fallback when Supabase realtime is unavailable (dev or missing anon key)
 - Efficient PostgreSQL indexes on timestamp and user_id
 
 ### Security

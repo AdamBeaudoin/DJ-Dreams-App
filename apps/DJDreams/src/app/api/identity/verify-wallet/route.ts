@@ -5,7 +5,10 @@ import {
   updateSessionUsername,
   updateSessionWalletAuth,
 } from '@/lib/domains/identity/session'
-import { consumeNonce } from '@/lib/domains/identity/nonce-store'
+import {
+  consumeNonce,
+  NONCE_COOKIE_NAME,
+} from '@/lib/domains/identity/nonce-store'
 import { sanitizeUsername } from '@/lib/domains/identity/username'
 import { WALLET_AUTH_STATEMENT } from '@/lib/domains/identity/wallet-auth'
 
@@ -52,8 +55,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid wallet auth payload' }, { status: 400 })
     }
 
-    if (!consumeNonce(nonce)) {
-      return NextResponse.json({ error: 'Invalid or expired nonce' }, { status: 400 })
+    // Validate the nonce against the HMAC-signed cookie set by /nonce. The
+    // cookie is single-use: clear it on every response after the consume
+    // attempt so a replay (even on the same instance) is rejected.
+    const cookieNonce = req.cookies.get(NONCE_COOKIE_NAME)?.value
+    const nonceOk = consumeNonce(cookieNonce, nonce)
+    const res = (body: unknown, status: number) =>
+      NextResponse.json(body, { status })
+    const clearNonceCookie = (response: NextResponse) => {
+      response.cookies.set(NONCE_COOKIE_NAME, '', { maxAge: 0, path: '/' })
+      return response
+    }
+
+    if (!nonceOk) {
+      return clearNonceCookie(res({ error: 'Invalid or expired nonce' }, 400))
     }
 
     // verifySiweMessage throws on validation/signature failure and resolves
@@ -63,11 +78,11 @@ export async function POST(req: NextRequest) {
       result = await verifySiweMessage(payload, nonce, WALLET_AUTH_STATEMENT)
     } catch (error) {
       console.error('SIWE verification failed:', error)
-      return NextResponse.json({ error: 'Wallet auth verification failed' }, { status: 401 })
+      return clearNonceCookie(res({ error: 'Wallet auth verification failed' }, 401))
     }
 
     if (!result?.isValid) {
-      return NextResponse.json({ error: 'Wallet auth verification failed' }, { status: 401 })
+      return clearNonceCookie(res({ error: 'Wallet auth verification failed' }, 401))
     }
 
     const walletAddress = payload.address
@@ -87,13 +102,15 @@ export async function POST(req: NextRequest) {
       updated = await updateSessionUsername(session.nullifier, finalUsername)
     }
 
-    return NextResponse.json({
-      data: {
-        nullifier: updated.nullifier,
-        username: updated.username,
-        walletAddress,
-      },
-    })
+    return clearNonceCookie(
+      NextResponse.json({
+        data: {
+          nullifier: updated.nullifier,
+          username: updated.username,
+          walletAddress,
+        },
+      })
+    )
   } catch (error) {
     console.error('verify-wallet error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -25,13 +25,12 @@ export const MiniChatOverlay = memo(function MiniChatOverlay({ messages, onTap }
     >
       <div className="flex flex-col gap-1 p-2 rounded-lg bg-black/40 backdrop-blur-sm">
         {recentMessages.map((msg) => (
-          <div key={msg.id} className={`text-[10px] leading-tight truncate${msg.is_boosted ? ' bg-amber-500/20 rounded px-1' : ''}`}>
-            {msg.is_boosted && <span className="text-amber-400">⚡ </span>}
-            <span className={`font-medium ${msg.is_boosted ? 'text-amber-300' : msg.is_donor ? 'text-amber-400' : 'text-gray-400'}`}>
-              {!msg.is_boosted && msg.is_donor && '◆ '}
+          <div key={msg.id} className="text-[10px] leading-tight truncate">
+            <span className={`font-medium ${msg.is_donor ? 'text-amber-400' : 'text-gray-400'}`}>
+              {msg.is_donor && '◆ '}
               {msg.username}
             </span>
-            <span className={msg.is_boosted ? 'text-amber-200 ml-1' : 'text-gray-300 ml-1'}>{msg.message}</span>
+            <span className="text-gray-300 ml-1">{msg.message}</span>
           </div>
         ))}
       </div>

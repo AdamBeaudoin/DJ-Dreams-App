@@ -25,9 +25,15 @@ jest.mock('@/lib/domains/identity/session', () => ({
   updateSessionWalletAuth: (...args: unknown[]) => mockUpdateSessionWalletAuth(...args),
 }))
 
-jest.mock('@/lib/domains/identity/nonce-store', () => ({
-  consumeNonce: (...args: unknown[]) => mockConsumeNonce(...args),
-}))
+jest.mock('@/lib/domains/identity/nonce-store', () => {
+  const actual = jest.requireActual<typeof import('@/lib/domains/identity/nonce-store')>(
+    '@/lib/domains/identity/nonce-store'
+  )
+  return {
+    ...actual,
+    consumeNonce: (...args: unknown[]) => mockConsumeNonce(...args),
+  }
+})
 
 import { POST } from '../route'
 

@@ -1,121 +1,112 @@
-# 🌍 World ID Setup Guide for DJ Dreams
+# World ID Setup Guide for DJ Dreams
 
 ## Overview
-This guide walks you through setting up World ID verification for the DJ Dreams chat feature. Users will need to verify their World ID to chat, preventing bots and ensuring only real humans can participate.
 
-## 🔧 Prerequisites
-- World ID account and World App installed
-- Access to [World Developer Portal](https://developer.worldcoin.org/)
-- Vercel account for environment variables
+DJ Dreams uses World ID to gate chat to verified humans. The flow has two parts:
 
-## 📋 Setup Steps
+1. **World ID verify (IDKit, RP-signed)** — proves personhood and returns a
+   `nullifier`. The session starts with a fallback display name `Human #xxxxxx`.
+2. **MiniKit Wallet Auth (SIWE)** — runs right after verify inside World App and
+   upgrades the session to the user's real **World App username** (e.g. `alice`)
+   plus their wallet address. Outside World App, the fallback name is kept and
+   chat still works.
 
-### 1. Create World ID App
-1. Go to [World Developer Portal](https://developer.worldcoin.org/)
-2. Click **"Create New App"**
-3. Fill in app details:
-   - **App Name**: DJ Dreams
-   - **App Description**: Live DJ streaming with verified human chat
-   - **App URL**: `https://dj-dreams-app.vercel.app`
-   - **App Icon**: Upload your DJ Dreams logo
+> Per Worldcoin guidance: World ID verify is a personhood gate, **not** a login.
+   The username comes from `MiniKit.user.username` after `walletAuth`, never from
+   the verify proof.
 
-### 2. Create Incognito Action
-1. In your app dashboard, go to **"Actions"**
-2. Click **"Create Action"**
-3. Configure the action:
-   - **Action ID**: `dj-dreams-chat`
-   - **Action Name**: DJ Dreams Chat
-   - **Action Description**: Allows verified humans to chat during DJ streams
-   - **Max Verifications**: `1` (one verification per person)
-   - **Verification Level**: `Orb` (highest security)
+## Prerequisites
 
-### 3. Get Your Credentials
-After creating the app, you'll get:
-- **App ID**: `app_staging_xxxxxx` (for staging) or `app_xxxxxx` (for production)
-- **Action ID**: `dj-dreams-chat`
+- A World app in **Managed** mode on the [World Developer Portal](https://developer.worldcoin.org/)
+- World App installed (for end-to-end testing)
+- Vercel project + Supabase project configured
 
-### 4. Configure Environment Variables
+## Credentials
 
-#### For Vercel Deployment:
-1. Go to your Vercel project dashboard
-2. Navigate to **Settings** → **Environment Variables**
-3. Add this variable:
+Create the app and an action in the Developer Portal, then collect:
+
+| Variable | What it is | Where |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_ID` | World app id, e.g. `app_xxx` | Portal → app |
+| `RP_ID` | Relying-party id, e.g. `rp_xxx` | Portal → app (Managed mode) |
+| `RP_SIGNING_KEY` | RP ECDSA signing key (hex) | Portal → app → signing key |
+| `DEV_PORTAL_API_KEY` | Developer Portal API key | Portal → account → API keys |
+
+The **action id** used by the app is `dj-dreams-chat-verification` (see
+`src/components/identity/world-id-verify.tsx` and
+`src/app/api/identity/rp-context/route.ts`). Create that exact action in the
+portal (one verification per person, Orb or Device level as desired).
+
+## Environment variables
+
+Set these in Vercel (Project → Settings → Environment Variables) and locally in
+`apps/DJDreams/.env.local`:
 
 ```
-NEXT_PUBLIC_APP_ID=app_staging_xxxxxx
+NEXT_PUBLIC_APP_ID=app_xxx
+RP_ID=rp_xxx
+RP_SIGNING_KEY=<hex signing key>
+DEV_PORTAL_API_KEY=<dev portal api key>
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+NEXT_PUBLIC_TIP_RECIPIENT_ADDRESS=0x...
+NEXT_PUBLIC_TIP_AMOUNT=1
 ```
 
-#### For Local Development:
-Create `apps/DJDreams/.env.local`:
+Server-only vars (`RP_ID`, `RP_SIGNING_KEY`, `DEV_PORTAL_API_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`) must never be exposed to the browser. All access
+goes through `src/lib/env.ts`, which fails fast with `Missing env vars: X` if a
+required var is unset.
+
+## How the username flow works
+
 ```
-NEXT_PUBLIC_APP_ID=app_staging_xxxxxx
+Verify with World ID
+  └─ POST /api/identity/rp-context   (RP-signed context for IDKit)
+  └─ IDKit verify                     (returns nullifier)
+  └─ POST /api/identity/verify        (creates session "Human #xxxxxx" + cookie)
+  └─ MiniKit.walletAuth               (SIWE prompt inside World App)
+       └─ POST /api/identity/nonce    (sets HMAC-signed httpOnly nonce cookie)
+       └─ POST /api/identity/verify-wallet (verifies SIWE, upgrades username)
+  └─ GET /api/identity/session        (client syncs authoritative username on mount)
 ```
 
-### 5. Test the Integration
+The SIWE nonce is stored in an **HMAC-signed httpOnly cookie** (not in-memory),
+so it works across serverless instances. The cookie is cleared on consume
+(single-use). The HMAC key is derived (domain-separated) from `RP_SIGNING_KEY`,
+so no extra env var is required.
 
-#### Testing in World App:
-1. Open World App on your phone
-2. Navigate to your deployed app: `https://dj-dreams-app.vercel.app`
-3. Click **"🌍 Verify World ID"** in the chat section
-4. Complete the verification process
-5. You should now be able to chat!
+If the user rejects walletAuth, isn't in World App, or the upgrade errors, the
+UI surfaces a clear toast with a retry action and keeps the fallback name — it
+never claims success on failure.
 
-#### Testing Flow:
-1. **Without World App**: Shows message "Please open this app in World App"
-2. **With World App**: Opens verification drawer
-3. **After Verification**: Chat becomes available with "Verified Human" status
+## Testing
 
-## 🔒 Security Features
+1. **Outside World App (web):** Verify succeeds; chat works as `Human #xxxxxx`;
+   a toast explains the username is available in World App.
+2. **Inside World App:** Verify → walletAuth prompt → chat shows the real World
+   App username.
+3. **Reload:** `GET /api/identity/session` syncs the server username into the
+   UI; a stale/expired cookie clears the local session.
 
-### What World ID Provides:
-- **Unique Human Verification**: Each person can only verify once
-- **Bot Prevention**: Prevents automated spam and fake accounts
-- **Privacy Preserving**: Uses zero-knowledge proofs, no personal data stored
-- **Nullifier Hash**: Unique identifier that can't be linked back to identity
+## Production checklist
 
-### Implementation Details:
-- **Verification Level**: Orb (highest security, requires in-person verification)
-- **Action Limit**: 1 verification per person per action
-- **Signal**: Uses app origin for additional security
-- **Backend Verification**: Proofs are verified server-side for security
+- [ ] Production (non-staging) App ID and RP credentials set in Vercel
+- [ ] Action `dj-dreams-chat-verification` created in the portal
+- [ ] Supabase migrations `001`–`004` applied
+- [ ] Rate limiting active on `/api/chat/send` (per-nullifier) and identity
+      endpoints
+- [ ] End-to-end verify → walletAuth → chat tested inside World App
 
-## 🚀 Production Checklist
+## Troubleshooting
 
-Before going live:
-- [ ] Switch from staging to production App ID
-- [ ] Test verification flow end-to-end
-- [ ] Monitor verification success rates
-- [ ] Set up error logging and monitoring
-- [ ] Consider adding rate limiting for chat messages
-
-## 🔧 Troubleshooting
-
-### Common Issues:
-
-**"App ID not configured"**
-- Ensure `NEXT_PUBLIC_APP_ID` is set in environment variables
-- Redeploy after adding environment variables
-
-**"Verification Failed"**
-- Check that Action ID (`dj-dreams-chat`) matches in Developer Portal
-- Verify user hasn't already verified for this action
-- Check World App is up to date
-
-**"World App Required"**
-- User needs to open the app in World App browser
-- Share the direct link: `https://dj-dreams-app.vercel.app`
-
-## 📊 Analytics
-Track verification success/failure rates to monitor:
-- User adoption of verification
-- Technical issues with verification flow
-- Bot detection effectiveness
-
-## 🎯 Next Steps
-Once basic verification is working, consider:
-- Adding user reputation system
-- Implementing chat moderation
-- Adding verification badges/levels
-- Integrating with user profiles
-
-**Your DJ Dreams app now has secure, verified human chat! 🎵** 
+- **`Missing env vars: X`** — the named var is empty/unset in the current
+  environment. Add it and redeploy.
+- **`Verification failed`** — the portal action id doesn't match
+  `dj-dreams-chat-verification`, or the user already verified for this action.
+- **Username stays `Human #xxxxxx`** — walletAuth didn't run or was rejected.
+  This is expected outside World App; inside World App, tap "Connect username"
+  in the toast to retry.
+- **`Invalid or expired nonce`** — the SIWE nonce cookie was missing/expired.
+  Re-trigger walletAuth to mint a fresh nonce.

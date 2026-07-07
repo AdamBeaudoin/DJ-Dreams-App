@@ -9,7 +9,6 @@ export interface ChatMessage {
   nullifier_hash?: string
   session_nullifier?: string
   is_moderated?: boolean
-  is_boosted?: boolean
   is_donor?: boolean // Computed server-side, not persisted
   created_at: string
 }

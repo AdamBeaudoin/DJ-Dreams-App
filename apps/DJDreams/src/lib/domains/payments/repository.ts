@@ -119,24 +119,3 @@ export async function getDonorNullifiers(nullifiers: string[]): Promise<Set<stri
 
   return result
 }
-
-const BOOST_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
-
-/**
- * Check if the user has a recently consumed boost payment (within 5 minutes).
- * Used to validate boosted message claims.
- */
-export async function hasRecentBoostPayment(nullifier: string): Promise<boolean> {
-  const cutoff = new Date(Date.now() - BOOST_WINDOW_MS).toISOString()
-
-  const { data, error } = await getSupabaseServer()
-    .from('payment_references')
-    .select('id')
-    .eq('nullifier', nullifier)
-    .eq('purpose', 'boost')
-    .eq('used', true)
-    .gt('verified_at', cutoff)
-    .limit(1)
-
-  return !error && !!data && data.length > 0
-}

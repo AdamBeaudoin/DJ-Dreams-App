@@ -10,6 +10,7 @@ import { ToastAction } from '@/components/ui/toast'
 import type { PayCommandInput } from '@worldcoin/minikit-js'
 import { isFallbackUsername } from '@/lib/domains/identity/username'
 import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
+import { env } from '@/lib/env'
 
 const STORAGE_KEY = 'dj-dreams-session'
 
@@ -19,8 +20,6 @@ export default function HomePage() {
   const [username, setUsername] = useState('')
   const [isLandscape, setIsLandscape] = useState(false)
   const [isDonor, setIsDonor] = useState(false)
-  const [isBoostMode, setIsBoostMode] = useState(false)
-  const [isBoosting, setIsBoosting] = useState(false)
   const { toast } = useToast()
 
   const streamPlayerRef = useRef<StreamPlayerHandle>(null)
@@ -41,8 +40,14 @@ export default function HomePage() {
     }
   }, [isLandscape])
 
-  // Restore session from localStorage on mount
+  // Restore + sync session: read localStorage for an instant first paint, then
+  // ask the server for the authoritative session. If the cookie is gone/expired
+  // the server returns 401/403 and we drop the stale local session so the UI
+  // never shows a "verified" state the API would reject. Network blips leave
+  // the local state as-is (we don't log someone out on a transient failure).
   useEffect(() => {
+    let cancelled = false
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
@@ -53,6 +58,38 @@ export default function HomePage() {
         }
       }
     } catch {}
+
+    fetch('/api/identity/session', { method: 'GET' })
+      .then(async (res) => {
+        if (cancelled) return
+        if (res.ok) {
+          const data = await res.json()
+          const s = data?.data
+          if (s?.nullifier) {
+            setNullifier(s.nullifier)
+            setUsername(s.username || '')
+            try {
+              localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({ nullifier: s.nullifier, username: s.username || '' })
+              )
+            } catch {}
+          }
+        } else if (res.status === 401 || res.status === 403) {
+          setNullifier(null)
+          setUsername('')
+          try {
+            localStorage.removeItem(STORAGE_KEY)
+          } catch {}
+        }
+      })
+      .catch(() => {
+        // Network error — keep the local first-paint state.
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Refresh fallback usernames from World App when a session already exists
@@ -107,15 +144,15 @@ export default function HomePage() {
     } catch {}
   }
 
-  // --- Shared payment flow ---
-  const runPaymentFlow = async (purpose: 'tip' | 'boost'): Promise<boolean> => {
+  // --- Tip payment flow ---
+  const runTipFlow = async (): Promise<boolean> => {
     if (!nullifier) {
       toast({ title: 'Verify first', description: 'Please verify with World ID.', variant: 'destructive' })
       return false
     }
 
-    const recipient = process.env.NEXT_PUBLIC_TIP_RECIPIENT_ADDRESS || '0x693d8dced3be29222691123656daea9f18e95f4b'
-    const amountWld = Number(process.env.NEXT_PUBLIC_TIP_AMOUNT || '1')
+    const recipient = env.tipRecipientAddress()
+    const amountWld = env.tipAmount()
 
     try {
       const { MiniKit, Tokens, tokenToDecimals, Network } = await import('@worldcoin/minikit-js')
@@ -128,7 +165,7 @@ export default function HomePage() {
       const initRes = await fetch('/api/payments/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ purpose }),
+        body: JSON.stringify({}),
       })
       const { id: reference, error: initError } = await initRes.json()
       if (!initRes.ok) {
@@ -145,7 +182,7 @@ export default function HomePage() {
             token_amount: tokenToDecimals(amountWld, Tokens.WLD).toString(),
           },
         ],
-        description: purpose === 'boost' ? 'Boost a message in DJ Dreams' : 'Tip for DJ Dreams',
+        description: 'Tip for DJ Dreams',
         network: Network.WorldChain,
       }
 
@@ -186,7 +223,7 @@ export default function HomePage() {
   const handleTip = useCallback(async () => {
     setIsTipping(true)
     try {
-      const success = await runPaymentFlow('tip')
+      const success = await runTipFlow()
       if (success) {
         toast({ title: 'Thanks!', description: 'Your tip was sent successfully!' })
       }
@@ -194,24 +231,6 @@ export default function HomePage() {
       setIsTipping(false)
     }
   }, [nullifier, toast])
-
-  // --- Boost ---
-  const handleBoost = async () => {
-    if (!nullifier) {
-      toast({ title: 'Verify first', description: 'Please verify with World ID to boost.', variant: 'destructive' })
-      return
-    }
-    setIsBoosting(true)
-    try {
-      const success = await runPaymentFlow('boost')
-      if (success) {
-        setIsBoostMode(true)
-        toast({ title: 'Boost ready!', description: 'Type your boosted message.' })
-      }
-    } finally {
-      setIsBoosting(false)
-    }
-  }
 
   const handleSkipBlocked = useCallback(() => {
     toast({
@@ -246,7 +265,7 @@ export default function HomePage() {
               DJ Dreams
             </h1>
           </div>
-          <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-4 sm:mb-6 px-4 uppercase tracking-[0.3em] font-light">
+          <p className="text-sm text-muted-foreground/80 mb-4 sm:mb-6 px-4 font-normal tracking-wide">
             DJ sets from around the world
           </p>
           <div className="flex items-center justify-center gap-2 sm:gap-3">
@@ -301,10 +320,6 @@ export default function HomePage() {
           isLoading={isLoading}
           isConnected={isConnected}
           sendMessage={sendMessage}
-          isBoostMode={isBoostMode}
-          onBoost={handleBoost}
-          isBoosting={isBoosting}
-          onBoostMessageSent={() => setIsBoostMode(false)}
         />
       </div>
     </div>

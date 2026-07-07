@@ -20,29 +20,35 @@ const mockFetch = jest.fn()
 global.fetch = mockFetch
 
 import { POST } from '../route'
+import { _resetEnvForTests } from '@/lib/env'
+import { identityRateLimiter } from '@/lib/rate-limit'
 
-function makeRequest(body: Record<string, unknown>) {
+function makeRequest(body: Record<string, unknown>, ip?: string) {
   return new NextRequest('http://localhost/api/identity/verify', {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ip ? { 'x-forwarded-for': ip } : {}),
+    },
   })
 }
 
 describe('POST /api/identity/verify', () => {
   let savedRpId: string | undefined
-  let savedAppId: string | undefined
 
   beforeEach(() => {
     jest.clearAllMocks()
     savedRpId = process.env.RP_ID
-    savedAppId = process.env.NEXT_PUBLIC_APP_ID
     process.env.RP_ID = 'test-rp-id'
+    // env.ts memoizes reads; clear the cache so process.env changes take effect.
+    _resetEnvForTests()
+    identityRateLimiter.reset()
   })
 
   afterEach(() => {
     process.env.RP_ID = savedRpId
-    process.env.NEXT_PUBLIC_APP_ID = savedAppId
+    _resetEnvForTests()
   })
 
   it('returns 400 when proof is missing', async () => {
@@ -109,11 +115,24 @@ describe('POST /api/identity/verify', () => {
 
   it('returns 500 when RP_ID is not configured', async () => {
     process.env.RP_ID = ''
-    process.env.NEXT_PUBLIC_APP_ID = ''
+    _resetEnvForTests()
 
     const res = await POST(makeRequest({ proof: { merkle_root: '0x1' } }))
     expect(res.status).toBe(500)
     const body = await res.json()
-    expect(body.error).toBe('RP_ID not configured')
+    expect(body.error).toBe('Missing env vars: RP_ID')
+  })
+
+  it('rate-limits repeated verify attempts from the same IP', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ success: false, code: 'invalid_proof' }),
+    })
+    const first = await POST(makeRequest({ proof: { merkle_root: '0x1' } }, '9.9.9.9'))
+    expect(first.status).toBe(400)
+
+    const second = await POST(makeRequest({ proof: { merkle_root: '0x1' } }, '9.9.9.9'))
+    expect(second.status).toBe(429)
+    expect(second.headers.get('RetryAfter')).toBeTruthy()
   })
 })

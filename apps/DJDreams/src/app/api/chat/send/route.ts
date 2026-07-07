@@ -3,7 +3,6 @@ import { requireSession } from '@/lib/domains/identity/auth'
 import { touchSession } from '@/lib/domains/identity/session'
 import { insertMessage } from '@/lib/domains/chat/repository'
 import { moderateMessage, validateMessage } from '@/lib/domains/moderation/moderation'
-import { hasRecentBoostPayment } from '@/lib/domains/payments/repository'
 import { chatSendRateLimiter } from '@/lib/rate-limit'
 import type { ChatMessageInsert } from '@/lib/domains/chat/types'
 
@@ -32,15 +31,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { message, is_boosted } = await req.json()
-
-    // Validate boost claim against recent payment
-    if (is_boosted) {
-      const hasPaid = await hasRecentBoostPayment(session.nullifier)
-      if (!hasPaid) {
-        return NextResponse.json({ error: 'Boost payment required' }, { status: 403 })
-      }
-    }
+    const { message } = await req.json()
 
     const validation = validateMessage(message)
     if (!validation.isValid) {
@@ -63,7 +54,6 @@ export async function POST(req: NextRequest) {
       verified: true,
       session_nullifier: session.nullifier,
       is_moderated: !moderation.isClean,
-      is_boosted: is_boosted || false,
     }
 
     const savedMessage = await insertMessage(messageData)

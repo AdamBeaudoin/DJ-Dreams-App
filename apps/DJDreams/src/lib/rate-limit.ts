@@ -113,3 +113,29 @@ export class RateLimiter {
 
 /** Shared limiter instance for the chat send endpoint, keyed by nullifier. */
 export const chatSendRateLimiter = new RateLimiter()
+
+/**
+ * Limiter for pre-auth identity endpoints (/verify, /nonce, /rp-context), keyed
+ * by client IP. Looser than chat: these are infrequent, but they're unauthenticated
+ * abuse vectors (proof submission, nonce minting, RP-context signing).
+ *
+ * Note: like chatSendRateLimiter this is in-memory, so on serverless each
+ * instance has its own counters — limits are approximate under multi-instance
+ * deploy, which is acceptable for rate limiting (a slightly loose limit is fine).
+ */
+export const identityRateLimiter = new RateLimiter({
+  minIntervalMs: 5_000, // 1 attempt per 5 seconds per IP
+  windowMs: 60_000, // 60 second sliding window
+  windowMax: 10, // max 10 attempts per minute per IP
+})
+
+/**
+ * Best-effort client IP from request headers. Vercel sets `x-forwarded-for`
+ * (comma-separated, first entry is the client). Falls back to `x-real-ip`, then
+ * to `'unknown'` (all unidentified clients share that bucket).
+ */
+export function getClientIp(headers: { get: (name: string) => string | null }): string {
+  const forwarded = headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return headers.get('x-real-ip') ?? 'unknown'
+}

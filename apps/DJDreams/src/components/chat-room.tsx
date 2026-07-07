@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { useToast } from '@/components/ui/use-toast'
 import { WorldIdVerify } from '@/components/identity/world-id-verify'
 import { ChatSkeleton } from '@/components/chat/chat-skeleton'
 import { ChatEmptyState } from '@/components/chat/chat-empty-state'
@@ -14,22 +15,6 @@ function formatTime(dateString: string) {
 }
 
 const ChatMessageItem = memo(function ChatMessageItem({ message }: { message: ChatMessage }) {
-  if (message.is_boosted) {
-    return (
-      <div className="rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-fuchsia-500/10 border border-amber-400/30 p-3 shadow-glow-purple animate-fade-in">
-        <div className="flex items-center gap-2 text-xs mb-1">
-          {message.is_donor && <span className="text-amber-400 text-[10px]">◆</span>}
-          <span className="font-semibold text-amber-300">{message.username}</span>
-          <span className="text-amber-400/70 text-[10px] font-semibold uppercase tracking-wider">Boosted</span>
-          <span className="text-muted-foreground ml-auto">{formatTime(message.created_at)}</span>
-        </div>
-        <div className="text-foreground text-base break-words leading-relaxed">
-          {message.message}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col gap-1 animate-fade-in">
       <div className="flex items-center gap-2 text-xs">
@@ -51,21 +36,17 @@ interface ChatRoomProps {
   messages: ChatMessage[]
   isLoading: boolean
   isConnected: boolean
-  sendMessage: (message: string, nullifier: string, username: string, is_boosted?: boolean) => Promise<ChatMessage | undefined>
-  isBoostMode?: boolean
-  onBoost?: () => void
-  isBoosting?: boolean
-  onBoostMessageSent?: () => void
+  sendMessage: (message: string, nullifier: string, username: string) => Promise<ChatMessage | undefined>
 }
 
 export function ChatRoom({
   nullifier, username, onVerified,
   messages, isLoading, isConnected, sendMessage,
-  isBoostMode, onBoost, isBoosting, onBoostMessageSent,
 }: ChatRoomProps) {
   const [newMessage, setNewMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { toast } = useToast()
 
   const isVerified = nullifier !== null
 
@@ -80,19 +61,36 @@ export function ChatRoom({
     setIsSending(true)
 
     try {
-      await sendMessage(newMessage.trim(), nullifier, username, isBoostMode || false)
+      await sendMessage(newMessage.trim(), nullifier, username)
       setNewMessage('')
-      if (isBoostMode) {
-        onBoostMessageSent?.()
-      }
     } catch (error) {
-      console.error('Failed to send message:', error)
+      const e = error as Error & { status?: number }
+      console.error('Failed to send message:', e)
+      if (e.status === 401) {
+        toast({
+          title: 'Session expired',
+          description: 'Please verify with World ID again.',
+          variant: 'destructive',
+        })
+      } else if (e.status === 429) {
+        toast({
+          title: 'Slow down',
+          description: e.message || 'You are sending messages too quickly.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Failed to send',
+          description: e.message || 'Something went wrong. Please try again.',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setIsSending(false)
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
@@ -105,8 +103,12 @@ export function ChatRoom({
         <h3 className="text-primary font-semibold text-sm sm:text-base flex items-center gap-2 tracking-wide font-display">
           Live Chat
           <span className="text-xs text-primary/50 font-normal font-sans">({messages.length})</span>
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
-               title={isConnected ? 'Connected' : 'Disconnected'} />
+          <div
+            role="status"
+            aria-label={isConnected ? 'Chat connected' : 'Chat disconnected'}
+            title={isConnected ? 'Connected' : 'Disconnected'}
+            className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
+          />
         </h3>
         {!isVerified && <WorldIdVerify onVerified={onVerified} />}
       </div>
@@ -127,35 +129,22 @@ export function ChatRoom({
         )}
       </div>
 
-      {/* Boost mode indicator */}
-      {isBoostMode && (
-        <div className="mb-2 text-xs text-amber-400 flex items-center gap-1">
-          <span>⚡</span> Type your boosted message below
-        </div>
-      )}
-
       {/* Message input */}
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder={
-            !isVerified
-              ? "Verify with World ID to chat"
-              : isBoostMode
-                ? "Type your boosted message…"
-                : "Type your message…"
-          }
+          placeholder={!isVerified ? "Verify with World ID to chat" : "Type your message…"}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           disabled={!isVerified}
-          className={`flex-1 bg-black/30 border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 min-h-[44px] touch-manipulation${isBoostMode ? ' ring-2 ring-amber-400/60' : ''}`}
+          className="flex-1 bg-black/30 border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 min-h-[44px] touch-manipulation"
           maxLength={MAX_MESSAGE_LENGTH}
         />
         <Button
           onClick={handleSendMessage}
           disabled={!newMessage.trim() || !isVerified || isSending}
-          className={`${isBoostMode ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-glow-purple' : 'bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 hover:shadow-glow'} disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent px-4 sm:px-6 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]`}
+          className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 hover:shadow-glow disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent px-4 sm:px-6 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
         >
           {isSending ? (
             <Spinner size="md" />

@@ -60,19 +60,24 @@ export function useRealtimeChat() {
   const sendMessage = useCallback(async (
     message: string,
     _nullifier: string,
-    username: string,
-    is_boosted?: boolean
+    _username: string
   ) => {
     const response = await fetch('/api/chat/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, ...(is_boosted && { is_boosted: true }) }),
+      body: JSON.stringify({ message }),
     })
 
     const data = await response.json()
 
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to send message')
+      // Attach the status so the UI can distinguish auth expiry (401) from rate
+      // limiting (429) and surface a specific toast instead of a generic error.
+      const err = new Error(data.error || 'Failed to send message') as Error & {
+        status?: number
+      }
+      err.status = response.status
+      throw err
     }
 
     if (data.data?.moderated) {

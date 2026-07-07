@@ -1,13 +1,17 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { IDKitRequestWidget } from '@worldcoin/idkit'
 import { deviceLegacy, type IDKitResult, type RpContext } from '@worldcoin/idkit'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { ToastAction } from '@/components/ui/toast'
 import { useToast } from '@/components/ui/use-toast'
-import { resolveWorldAppUsername } from '@/lib/domains/identity/world-app-username'
-import { upgradeSessionWithWalletAuth } from '@/lib/domains/identity/wallet-auth-client'
+import {
+  upgradeSessionWithWalletAuth,
+  type WalletAuthUpgrade,
+} from '@/lib/domains/identity/wallet-auth-client'
+import { tryReadEnv } from '@/lib/env'
 
 interface WorldIdVerifyProps {
   onVerified: (nullifier: string, username: string) => void
@@ -23,6 +27,9 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [rpContext, setRpContext] = useState<RpContext | null>(null)
   const verifyResultRef = useRef<VerifyResult | null>(null)
+  // Lets a toast "retry" action call the latest upgrade routine without a
+  // self-referential useCallback dependency or a stale closure.
+  const runUpgradeRef = useRef<(() => Promise<void>) | null>(null)
   const { toast } = useToast()
 
   const fetchRpContext = useCallback(async () => {
@@ -57,15 +64,13 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
   }, [toast])
 
   const handleVerify = async (result: IDKitResult) => {
-    const worldUsername = await resolveWorldAppUsername()
-
+    // World ID verify only proves personhood and returns a nullifier — it does
+    // NOT include a username. The session starts as "Human #xxxxxx" and is
+    // upgraded to the real World App username by walletAuth in handleSuccess.
     const res = await fetch('/api/identity/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        proof: result,
-        ...(worldUsername && { username: worldUsername }),
-      }),
+      body: JSON.stringify({ proof: result }),
     })
 
     const data = await res.json()
@@ -78,32 +83,84 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
     verifyResultRef.current = { nullifier: data.data.nullifier, username: data.data.username }
   }
 
-  const handleSuccess = async () => {
+  // Upgrades the just-verified session to the user's real World App username via
+  // MiniKit Wallet Auth (SIWE). Typed outcome drives the toast + retry affordance;
+  // we never claim success when walletAuth failed. Verify and chat still work with
+  // the fallback "Human #xxxxxx" name in every non-ok branch.
+  const runWalletAuthUpgrade = useCallback(async () => {
     const result = verifyResultRef.current
     if (!result) return
 
-    // After World ID proves personhood, run MiniKit Wallet Auth to surface the
-    // user's real World App username. This is best-effort: outside World App, when
-    // MiniKit isn't installed, or if the user rejects the prompt, we keep the
-    // fallback "Human #xxxxxx" name — verify and chat still work.
     setIsLoading(true)
+    let upgrade: WalletAuthUpgrade
     try {
-      const upgrade = await upgradeSessionWithWalletAuth(result.nullifier)
-      if (upgrade?.username) {
-        result.username = upgrade.username
-      }
-    } catch (error) {
-      console.error('Wallet auth upgrade failed:', error)
+      upgrade = await upgradeSessionWithWalletAuth(result.nullifier)
     } finally {
       setIsLoading(false)
     }
 
-    onVerified(result.nullifier, result.username)
-    toast({
-      title: 'Verified!',
-      description: `Welcome ${result.username}! You can now chat.`,
-    })
-    verifyResultRef.current = null
+    if (upgrade.username) {
+      result.username = upgrade.username
+    }
+
+    const retry = () => {
+      void runUpgradeRef.current?.()
+    }
+
+    switch (upgrade.status) {
+      case 'ok':
+        toast({
+          title: 'Verified!',
+          description: upgrade.username
+            ? `Welcome ${upgrade.username}! You can now chat.`
+            : 'You can now chat. Your World App username will appear shortly.',
+        })
+        onVerified(result.nullifier, result.username)
+        verifyResultRef.current = null
+        break
+      case 'unavailable':
+        // Outside World App — expected, no retry possible here. Chat works.
+        toast({
+          title: 'Verified!',
+          description: 'Open DJ Dreams in World App to show your username. You can chat now.',
+        })
+        onVerified(result.nullifier, result.username)
+        verifyResultRef.current = null
+        break
+      case 'rejected':
+        toast({
+          title: 'Username skipped',
+          description: `You're chatting as ${result.username}. Connect your World App username to show your name.`,
+          action: (
+            <ToastAction altText="Connect username" onClick={retry}>
+              Connect username
+            </ToastAction>
+          ),
+        })
+        onVerified(result.nullifier, result.username)
+        break
+      case 'error':
+        toast({
+          title: 'Username sign-in failed',
+          description: `You're chatting as ${result.username}. Try connecting your username again.`,
+          variant: 'destructive',
+          action: (
+            <ToastAction altText="Try again" onClick={retry}>
+              Try again
+            </ToastAction>
+          ),
+        })
+        onVerified(result.nullifier, result.username)
+        break
+    }
+  }, [onVerified, toast])
+
+  useEffect(() => {
+    runUpgradeRef.current = runWalletAuthUpgrade
+  }, [runWalletAuthUpgrade])
+
+  const handleSuccess = () => {
+    void runWalletAuthUpgrade()
   }
 
   const handleError = (errorCode: unknown) => {
@@ -115,7 +172,7 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
     })
   }
 
-  const appId = process.env.NEXT_PUBLIC_APP_ID as `app_${string}`
+  const appId = tryReadEnv('NEXT_PUBLIC_APP_ID') as `app_${string}` | undefined
 
   return (
     <>

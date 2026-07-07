@@ -13,8 +13,8 @@ describe('Chat Repository', () => {
   describe('fetchMessages', () => {
     it('returns messages in chronological order', async () => {
       mockResult.data = [
-        { id: '2', message: 'second', created_at: '2025-01-02' },
-        { id: '1', message: 'first', created_at: '2025-01-01' },
+        { id: '2', user_id: '0xb', username: 'Bob', message: 'second', verified: true, created_at: '2025-01-02' },
+        { id: '1', user_id: '0xa', username: 'Alice', message: 'first', verified: true, created_at: '2025-01-01' },
       ]
 
       const result = await fetchMessages(50, 0)
@@ -25,6 +25,19 @@ describe('Chat Repository', () => {
     it('throws on database error', async () => {
       mockResult.error = { message: 'DB error' }
       await expect(fetchMessages(50, 0)).rejects.toThrow('Failed to fetch messages')
+    })
+
+    it('throws when the response is not an array', async () => {
+      mockResult.data = { not: 'an array' }
+      await expect(fetchMessages(50, 0)).rejects.toThrow('unexpected response shape')
+    })
+
+    it('throws on a malformed row (schema drift)', async () => {
+      mockResult.data = [
+        { id: '1', user_id: '0xa', username: 'Alice', message: 'hi', verified: true, created_at: '2025-01-01' },
+        { id: '2', message: 'missing fields' },
+      ]
+      await expect(fetchMessages(50, 0)).rejects.toThrow('malformed row')
     })
   })
 
@@ -43,6 +56,13 @@ describe('Chat Repository', () => {
 
       const input: ChatMessageInsert = { user_id: '0xabc', username: 'TestUser', message: 'Hello', verified: true }
       await expect(insertMessage(input)).rejects.toThrow('Failed to insert message')
+    })
+
+    it('throws on a malformed returned row', async () => {
+      mockResult.data = { id: 'msg1' }
+
+      const input: ChatMessageInsert = { user_id: '0xabc', username: 'TestUser', message: 'Hello', verified: true }
+      await expect(insertMessage(input)).rejects.toThrow('malformed row')
     })
   })
 })

@@ -11,7 +11,8 @@ describe('Identity Session', () => {
 
   describe('lookupSessionByToken', () => {
     it('returns session when found', async () => {
-      const session = { nullifier: '0xabc123', username: 'Human #c123', session_token: 'tok_abc', created_at: '2025-01-01T00:00:00Z', last_seen_at: '2025-01-01T00:00:00Z' }
+      const fresh = new Date(Date.now() - 60 * 1000).toISOString()
+      const session = { nullifier: '0xabc123', username: 'Human #c123', session_token: 'tok_abc', created_at: fresh, last_seen_at: fresh }
       mockResult.data = session
 
       const result = await lookupSessionByToken('tok_abc')
@@ -28,6 +29,36 @@ describe('Identity Session', () => {
     it('throws on unexpected DB error', async () => {
       mockResult.error = { code: 'PGRST500', message: 'Connection failed' }
       await expect(lookupSessionByToken('tok_abc')).rejects.toThrow('Session lookup failed')
+    })
+
+    it('throws on a malformed row (schema drift)', async () => {
+      mockResult.data = { nullifier: '0xabc' } // missing required string fields
+      await expect(lookupSessionByToken('tok_abc')).rejects.toThrow('malformed verified_sessions row')
+    })
+
+    it('returns null when the session is older than the max age', async () => {
+      const stale = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+      mockResult.data = {
+        nullifier: '0xabc123',
+        username: 'Human #c123',
+        session_token: 'tok_abc',
+        created_at: stale,
+        last_seen_at: stale,
+      }
+      expect(await lookupSessionByToken('tok_abc')).toBeNull()
+    })
+
+    it('returns the session when it is within the max age', async () => {
+      const fresh = new Date(Date.now() - 60 * 1000).toISOString()
+      const session = {
+        nullifier: '0xabc123',
+        username: 'Human #c123',
+        session_token: 'tok_abc',
+        created_at: fresh,
+        last_seen_at: fresh,
+      }
+      mockResult.data = session
+      expect(await lookupSessionByToken('tok_abc')).toEqual(session)
     })
   })
 

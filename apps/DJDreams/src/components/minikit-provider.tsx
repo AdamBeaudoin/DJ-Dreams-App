@@ -2,13 +2,14 @@
 
 import { type ReactNode, useEffect } from 'react'
 import { MiniKit } from '@worldcoin/minikit-js'
+import { tryReadEnv } from '@/lib/env'
 
 export function MiniKitProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Only install MiniKit if we're in a browser environment
     if (typeof window !== 'undefined') {
       try {
-        const appId = process.env.NEXT_PUBLIC_APP_ID as `app_${string}` | undefined
+        const appId = tryReadEnv('NEXT_PUBLIC_APP_ID') as `app_${string}` | undefined
         if (appId) {
           MiniKit.install(appId)
         } else {
