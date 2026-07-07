@@ -1,4 +1,4 @@
-import { moderateMessage, validateMessage } from '../moderation'
+import { moderateMessage, validateMessage } from '../domains/moderation/moderation'
 
 describe('Message Moderation', () => {
   describe('moderateMessage', () => {

@@ -6,7 +6,6 @@ export interface ChatMessage {
   username: string
   message: string
   verified: boolean
-  nullifier_hash?: string
   session_nullifier?: string
   is_moderated?: boolean
   is_donor?: boolean // Computed server-side, not persisted
