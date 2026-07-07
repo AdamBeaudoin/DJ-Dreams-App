@@ -50,11 +50,27 @@ describe('ChatRoom states', () => {
         {...baseProps}
         nullifier={null}
         canWrite={false}
+        sessionChecked={true}
         messages={[]}
         isLoading={false}
       />
     )
     expect(screen.getByText('Verify with World ID to join the chat')).toBeInTheDocument()
+  })
+
+  it('shows checking session before verify CTA appears', () => {
+    render(
+      <ChatRoom
+        {...baseProps}
+        nullifier={null}
+        canWrite={false}
+        sessionChecked={false}
+        messages={[]}
+        isLoading={false}
+      />
+    )
+    expect(screen.getByText('Checking session…')).toBeInTheDocument()
+    expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
   })
 
   it('keeps input locked when nullifier exists but server has not confirmed session', () => {
@@ -84,6 +100,21 @@ describe('ChatRoom states', () => {
       />
     )
     expect(screen.getByPlaceholderText('Verify with World ID to chat')).toBeDisabled()
+    expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
+  })
+
+  it('hides verify CTA once the server confirms a session', () => {
+    render(
+      <ChatRoom
+        {...baseProps}
+        canWrite={true}
+        sessionChecked={true}
+        messages={[]}
+        isLoading={false}
+      />
+    )
+    expect(screen.queryByTestId('world-id-verify')).not.toBeInTheDocument()
+    expect(screen.queryByText('Checking session…')).not.toBeInTheDocument()
   })
 
   it('renders messages once loaded', async () => {

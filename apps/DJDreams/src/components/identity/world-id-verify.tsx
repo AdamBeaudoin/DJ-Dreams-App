@@ -15,6 +15,8 @@ import { tryReadEnv } from '@/lib/env'
 
 interface WorldIdVerifyProps {
   onVerified: (nullifier: string, username: string) => void
+  /** Stretch button to full container width (mobile chat CTA). */
+  fullWidth?: boolean
 }
 
 interface VerifyResult {
@@ -22,7 +24,7 @@ interface VerifyResult {
   username: string
 }
 
-export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
+export function WorldIdVerify({ onVerified, fullWidth = false }: WorldIdVerifyProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [rpContext, setRpContext] = useState<RpContext | null>(null)
@@ -179,7 +181,7 @@ export function WorldIdVerify({ onVerified }: WorldIdVerifyProps) {
       <Button
         onClick={fetchRpContext}
         disabled={isLoading}
-        className="bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]"
+        className={`bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 hover:shadow-glow text-xs sm:text-sm px-4 py-1 min-h-[44px] rounded-full touch-manipulation transition-all duration-200 active:scale-[0.97]${fullWidth ? ' w-full' : ''}`}
       >
         {isLoading ? (
           <div className="flex items-center gap-1">

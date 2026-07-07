@@ -105,9 +105,18 @@ export function ChatRoom({
     }
   }
 
+  const needsVerify = sessionChecked && !canWrite
+
+  // #region agent log
+  useEffect(() => {
+    if (typeof fetch === 'undefined') return
+    fetch('http://127.0.0.1:7841/ingest/e247fcfa-b334-4b3c-a271-ed20379bacfb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'797957'},body:JSON.stringify({sessionId:'797957',runId:'verify-cta',hypothesisId:'G',location:'chat-room.tsx:verify-cta',message:'verify CTA state',data:{canWrite,sessionChecked,needsVerify,messageCount:messages.length,isLoading},timestamp:Date.now()})}).catch(()=>{});
+  }, [canWrite, sessionChecked, needsVerify, messages.length, isLoading])
+  // #endregion
+
   return (
     <div id="chat-room" className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-md p-3 sm:p-5 shadow-card">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 min-w-0">
         <h3 className="text-primary font-semibold text-sm sm:text-base flex items-center gap-2 tracking-wide font-display">
           Live Chat
           <span className="text-xs text-primary/50 font-normal font-sans">({messages.length})</span>
@@ -115,10 +124,9 @@ export function ChatRoom({
             role="status"
             aria-label={isConnected ? 'Chat connected' : 'Chat disconnected'}
             title={isConnected ? 'Connected' : 'Disconnected'}
-            className={`w-2 h-2 rounded-full ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
+            className={`w-2 h-2 rounded-full shrink-0 ${isConnected ? 'bg-primary shadow-glow' : 'bg-red-400'}`}
           />
         </h3>
-        {!canWrite && <WorldIdVerify onVerified={onVerified} />}
       </div>
 
       {/* Messages container */}
@@ -140,6 +148,27 @@ export function ChatRoom({
           </div>
         )}
       </div>
+
+      {/* Verify CTA — below messages, above input; only after session check so it
+          doesn't flash then vanish when an existing cookie is found. Full-width on
+          mobile so iPhone mini can't clip it in the header row. */}
+      {!sessionChecked && (
+        <div
+          className="mb-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-center text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          Checking session…
+        </div>
+      )}
+      {needsVerify && (
+        <div className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
+          <p className="text-xs text-muted-foreground text-center mb-2">
+            Verify with World ID to join the live chat
+          </p>
+          <WorldIdVerify onVerified={onVerified} fullWidth />
+        </div>
+      )}
 
       {/* Message input */}
       <div className="flex gap-2">
