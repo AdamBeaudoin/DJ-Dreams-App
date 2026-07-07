@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo } from 'react'
 import dynamic from 'next/dynamic'
+import { X } from 'lucide-react'
 import { usePlaylist } from '@/hooks/usePlaylist'
 import { useLandscapeSwipe } from '@/hooks/useLandscapeSwipe'
 import { Spinner } from '@/components/ui/spinner'
@@ -196,10 +197,10 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
           <div className="absolute inset-0 bg-black/30 z-30 landscape-overlay-fade">
             <button
               onClick={handleExitFullscreen}
-              className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white"
+              className="absolute top-4 right-4 w-11 h-11 min-h-[44px] min-w-[44px] bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black transition-colors hover:bg-white/30"
               aria-label="Exit fullscreen"
             >
-              ✕
+              <X className="h-5 w-5" />
             </button>
           </div>
         )}
