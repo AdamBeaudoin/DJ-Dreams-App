@@ -4,14 +4,15 @@ import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHand
 import dynamic from 'next/dynamic'
 import { usePlaylist } from '@/hooks/usePlaylist'
 import { useLandscapeSwipe } from '@/hooks/useLandscapeSwipe'
+import { Spinner } from '@/components/ui/spinner'
 
 const ReactPlayer = dynamic(() => import('react-player/youtube'), {
   ssr: false,
   loading: () => (
-    <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
-      <div className="text-center text-white">
-        <div className="text-lg mb-2">Loading live stream...</div>
-        <div className="text-sm text-gray-400">Initializing player...</div>
+    <div className="aspect-video bg-card rounded-xl shadow-card flex items-center justify-center animate-fade-in">
+      <div className="text-center">
+        <Spinner size="lg" className="mx-auto mb-3" />
+        <div className="text-sm text-muted-foreground">Loading live stream…</div>
       </div>
     </div>
   )
@@ -135,11 +136,11 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
 
   if (streamError) {
     return (
-      <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="text-lg mb-2">Stream temporarily offline</div>
-          <div className="text-sm text-gray-400">
-            Switching to next set...
+      <div className="aspect-video bg-card rounded-xl shadow-card flex items-center justify-center animate-fade-in">
+        <div className="text-center px-4">
+          <div className="text-base font-medium text-foreground mb-1">Stream temporarily offline</div>
+          <div className="text-sm text-muted-foreground">
+            Switching to next set…
           </div>
         </div>
       </div>
@@ -152,7 +153,7 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
         ref={containerRef}
         className={effectiveLandscape
           ? 'relative w-full h-full'
-          : 'relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl'
+          : 'relative aspect-video bg-black rounded-lg overflow-hidden shadow-card'
         }
         onClick={handlePlayerTap}
       >
@@ -182,10 +183,10 @@ const StreamPlayerImpl = forwardRef<StreamPlayerHandle, StreamPlayerProps>(
 
 
         {isTransitioning && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
-            <div className="text-white text-center">
-              <div className="text-lg mb-2">Switching to next set...</div>
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+          <div className="absolute inset-0 bg-card/90 backdrop-blur-sm flex items-center justify-center z-20 animate-fade-in">
+            <div className="text-center">
+              <Spinner size="lg" className="mx-auto mb-3" />
+              <div className="text-sm text-muted-foreground">Switching to next set…</div>
             </div>
           </div>
         )}
