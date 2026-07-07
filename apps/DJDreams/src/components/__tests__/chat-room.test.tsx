@@ -80,6 +80,43 @@ describe('ChatRoom states', () => {
     expect(screen.queryByLabelText('Loading messages')).not.toBeInTheDocument()
   })
 
+  it('shows the live username on the current user own messages, not the stored fallback', () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 'm1',
+        user_id: 'null-123', // matches nullifier -> current user's own message
+        username: 'Human #abc123', // stale fallback stored on the row at send time
+        message: 'my message',
+        verified: true,
+        created_at: '2025-01-01T00:00:00Z',
+      },
+      {
+        id: 'm2',
+        user_id: 'u-other',
+        username: 'otheruser',
+        message: 'their message',
+        verified: true,
+        created_at: '2025-01-01T00:00:01Z',
+      },
+    ]
+
+    render(
+      <ChatRoom
+        {...baseProps}
+        nullifier="null-123"
+        username="realname"
+        messages={messages}
+        isLoading={false}
+      />
+    )
+
+    // Own message shows the live username; the stale stored fallback is gone.
+    expect(screen.queryByText('Human #abc123')).not.toBeInTheDocument()
+    expect(screen.getAllByText('realname').length).toBeGreaterThanOrEqual(1)
+    // Another user's message keeps its stored username.
+    expect(screen.getByText('otheruser')).toBeInTheDocument()
+  })
+
   it('does not call sendMessage while loading', async () => {
     const sendMessage = jest.fn()
     render(

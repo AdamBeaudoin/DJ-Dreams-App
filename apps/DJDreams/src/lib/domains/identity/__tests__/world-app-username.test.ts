@@ -46,4 +46,13 @@ describe('resolveWorldAppUsername', () => {
     expect(await resolveWorldAppUsername()).toBe('bob')
     expect(mockGetUserByAddress).toHaveBeenCalledWith('0x123')
   })
+
+  it('still calls getUserByAddress when walletAddress is unset (loosened bail)', async () => {
+    mockIsInstalled.mockReturnValue(true)
+    // MiniKit.user has no walletAddress yet (async SDK state right after walletAuth).
+    mockGetUserByAddress.mockResolvedValue({ username: 'carol', walletAddress: '0x456' })
+
+    expect(await resolveWorldAppUsername()).toBe('carol')
+    expect(mockGetUserByAddress).toHaveBeenCalledWith(undefined)
+  })
 })

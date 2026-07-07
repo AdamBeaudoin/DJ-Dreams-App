@@ -1,7 +1,7 @@
 'use client'
 
 import { MiniKit, type MiniAppWalletAuthPayload } from '@worldcoin/minikit-js'
-import { resolveWorldAppUsername } from './world-app-username'
+import { sanitizeUsername } from './username'
 import { WALLET_AUTH_STATEMENT, WALLET_AUTH_EXPIRATION_MS } from './wallet-auth'
 
 /**
@@ -24,6 +24,20 @@ export interface WalletAuthUpgrade {
   walletAddress?: string
   /** Short, loggable reason for non-ok statuses. Not shown verbatim to users. */
   message?: string
+}
+
+/**
+ * Resolve a World App username from a wallet address via MiniKit, swallowing
+ * errors so a failed lookup never breaks the upgrade — the server resolves
+ * authoritatively from the same address, so a missing client hint is fine.
+ */
+async function safeGetUsernameByAddress(address: string): Promise<string | undefined> {
+  try {
+    const info = await MiniKit.getUserByAddress(address)
+    return sanitizeUsername(info?.username) ?? undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -71,9 +85,16 @@ export async function upgradeSessionWithWalletAuth(
     return { status: 'rejected', message: 'User rejected the wallet sign-in prompt.' }
   }
 
-  // On success the SDK populates MiniKit.user.username / walletAddress. Resolve
-  // via the shared helper so the getUserByAddress fallback still applies.
-  const worldUsername = await resolveWorldAppUsername()
+  // MiniKit.user.username is populated asynchronously after walletAuth and is
+  // unreliable right when the command resolves — the root cause of usernames
+  // sticking at "Human #xxxxxx". The SIWE payload's `address` is guaranteed
+  // present, so resolve the username explicitly from it (with the cached
+  // MiniKit.user.username as a fast path). The server resolves authoritatively
+  // from the same address; this hint makes the immediate toast accurate and
+  // gives the server a fallback.
+  const cached = sanitizeUsername(MiniKit.user.username)
+  const worldUsername =
+    cached ?? (await safeGetUsernameByAddress(finalPayload.address))
 
   try {
     const res = await fetch('/api/identity/verify-wallet', {

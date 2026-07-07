@@ -14,12 +14,18 @@ function formatTime(dateString: string) {
   return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const ChatMessageItem = memo(function ChatMessageItem({ message }: { message: ChatMessage }) {
+const ChatMessageItem = memo(function ChatMessageItem({
+  message,
+  displayName,
+}: {
+  message: ChatMessage
+  displayName: string
+}) {
   return (
     <div className="flex flex-col gap-1 animate-fade-in">
       <div className="flex items-center gap-2 text-xs">
         {message.is_donor && <span className="text-amber-400 text-[10px]" title="Donor">◆</span>}
-        <span className="font-medium text-foreground/90">{message.username}</span>
+        <span className="font-medium text-foreground/90">{displayName}</span>
         <span className="text-muted-foreground">{formatTime(message.created_at)}</span>
       </div>
       <div className={`text-foreground text-sm bg-white/[0.06] border border-white/10 rounded-xl rounded-tl-sm px-3 py-2 ml-4 break-words leading-relaxed transition-colors hover:bg-white/[0.09]${message.is_donor ? ' border-l-2 border-l-amber-400/70' : ''}`}>
@@ -122,7 +128,11 @@ export function ChatRoom({
         ) : (
           <div className="space-y-3">
             {messages.map((message) => (
-              <ChatMessageItem key={message.id} message={message} />
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                displayName={message.user_id === nullifier ? username : message.username}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>

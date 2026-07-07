@@ -10,6 +10,7 @@ import {
   NONCE_COOKIE_NAME,
 } from '@/lib/domains/identity/nonce-store'
 import { sanitizeUsername } from '@/lib/domains/identity/username'
+import { resolveUsernameByAddress } from '@/lib/domains/identity/world-usernames-server'
 import { WALLET_AUTH_STATEMENT } from '@/lib/domains/identity/wallet-auth'
 
 export const dynamic = 'force-dynamic'
@@ -86,10 +87,14 @@ export async function POST(req: NextRequest) {
     }
 
     const walletAddress = payload.address
-    // Username comes from the client (MiniKit.user.username, populated post-walletAuth).
-    // If it wasn't supplied, keep the existing session username — the wallet address
-    // is stored separately and must never be used as a display name.
-    const finalUsername = sanitizeUsername(username) ?? session.username
+    // Resolve the username authoritatively from the SIWE-verified wallet address
+    // via World's public usernames service. This is independent of the client's
+    // MiniKit.user state, which is populated unreliably right after walletAuth —
+    // the root cause of usernames sticking at "Human #xxxxxx". Fall back to the
+    // client-supplied hint, then the existing session username. The wallet
+    // address itself is stored separately and must never be used as a display name.
+    const resolved = await resolveUsernameByAddress(walletAddress)
+    const finalUsername = resolved ?? sanitizeUsername(username) ?? session.username
 
     // Prefer the wallet+username update (needs migration 003). If the column is
     // missing, fall back to a username-only update so the real username still

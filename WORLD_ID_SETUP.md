@@ -8,12 +8,16 @@ DJ Dreams uses World ID to gate chat to verified humans. The flow has two parts:
    `nullifier`. The session starts with a fallback display name `Human #xxxxxx`.
 2. **MiniKit Wallet Auth (SIWE)** — runs right after verify inside World App and
    upgrades the session to the user's real **World App username** (e.g. `alice`)
-   plus their wallet address. Outside World App, the fallback name is kept and
-   chat still works.
+   plus their wallet address. The server resolves the username from the
+   SIWE-verified wallet address via World's public usernames service, so it does
+   not depend on `MiniKit.user` being populated (that state is asynchronous and
+   unreliable right after `walletAuth`). Outside World App, the fallback name is
+   kept and chat still works.
 
 > Per Worldcoin guidance: World ID verify is a personhood gate, **not** a login.
-   The username comes from `MiniKit.user.username` after `walletAuth`, never from
-   the verify proof.
+   The username is resolved from the wallet address after `walletAuth`
+   (`MiniKit.getUserByAddress` client-side; World's public usernames service
+   server-side), never from the verify proof.
 
 ## Prerequisites
 
@@ -68,7 +72,9 @@ Verify with World ID
   └─ POST /api/identity/verify        (creates session "Human #xxxxxx" + cookie)
   └─ MiniKit.walletAuth               (SIWE prompt inside World App)
        └─ POST /api/identity/nonce    (sets HMAC-signed httpOnly nonce cookie)
-       └─ POST /api/identity/verify-wallet (verifies SIWE, upgrades username)
+       └─ POST /api/identity/verify-wallet
+            (verifies SIWE, resolves username from payload.address via the
+             World public usernames service, upgrades the session)
   └─ GET /api/identity/session        (client syncs authoritative username on mount)
 ```
 
@@ -76,6 +82,15 @@ The SIWE nonce is stored in an **HMAC-signed httpOnly cookie** (not in-memory),
 so it works across serverless instances. The cookie is cleared on consume
 (single-use). The HMAC key is derived (domain-separated) from `RP_SIGNING_KEY`,
 so no extra env var is required.
+
+The username is resolved **server-side** in `/api/identity/verify-wallet` from
+the SIWE-verified `payload.address` via World's public usernames service
+(`GET https://usernames.worldcoin.org/api/v1/usernames/:address`, no auth). The
+client also resolves via `MiniKit.getUserByAddress(finalPayload.address)` as a
+hint, but the server's lookup is authoritative — it does not depend on
+`MiniKit.user` being populated. If the service has no record for the address or
+is unreachable, the session keeps the `Human #xxxxxx` fallback and chat still
+works.
 
 If the user rejects walletAuth, isn't in World App, or the upgrade errors, the
 UI surfaces a clear toast with a retry action and keeps the fallback name — it
@@ -105,8 +120,12 @@ never claims success on failure.
   environment. Add it and redeploy.
 - **`Verification failed`** — the portal action id doesn't match
   `dj-dreams-chat-verification`, or the user already verified for this action.
-- **Username stays `Human #xxxxxx`** — walletAuth didn't run or was rejected.
-  This is expected outside World App; inside World App, tap "Connect username"
-  in the toast to retry.
+- **Username stays `Human #xxxxxx`** — walletAuth didn't complete, or the server
+  couldn't resolve a username for the SIWE wallet address (the public usernames
+  service returned no record or was unreachable). Inside World App, tap "Connect
+  username" in the toast to retry walletAuth. If it persists, confirm walletAuth
+  succeeds and that `https://usernames.worldcoin.org` is reachable from the
+  server. The current user's own past messages are remapped to their live
+  username in the UI, but other users' old messages keep the name they sent with.
 - **`Invalid or expired nonce`** — the SIWE nonce cookie was missing/expired.
   Re-trigger walletAuth to mint a fresh nonce.

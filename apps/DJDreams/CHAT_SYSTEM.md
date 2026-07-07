@@ -21,8 +21,8 @@
 ### ✅ Enhanced Security
 - **World ID Verification**: Only verified humans can send messages
 - **Message Validation**: Length limits, spam detection, caps lock detection
-- **Usernames**: Real World App username via MiniKit Wallet Auth (SIWE); falls back to `Human #<nullifier-tail>` outside World App
-- **Server-Authoritative Identity**: Chat messages use the username bound to the session cookie, never a client-supplied value
+- **Usernames**: Real World App username resolved **server-side** from the SIWE-verified wallet address via World's public usernames service after MiniKit Wallet Auth; falls back to `Human #<nullifier-tail>` outside World App or when the lookup has no record
+- **Server-Authoritative Identity**: Chat messages use the username bound to the session cookie, never a client-supplied value; the current user's own past messages are remapped to their live session username in the UI
 
 ## 🏗️ Architecture
 
@@ -36,7 +36,7 @@
 - **`/api/chat/messages`**: Fetches message history (donor status enriched server-side)
 - **`/api/identity/verify`**: World ID verify (creates verified session + cookie)
 - **`/api/identity/rp-context`**: RP-signed context for IDKit
-- **`/api/identity/nonce`** + **`/api/identity/verify-wallet`**: SIWE wallet auth (upgrades username)
+- **`/api/identity/nonce`** + **`/api/identity/verify-wallet`**: SIWE wallet auth — verifies the signature, resolves the username from `payload.address` via World's public usernames service, and upgrades the session
 - **`/api/identity/session`**: GET syncs the authoritative session to the client; PATCH upgrades a fallback username
 
 ### Database Schema

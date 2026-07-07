@@ -15,11 +15,12 @@ export async function resolveWorldAppUsername(): Promise<string | undefined> {
   const cached = sanitizeUsername(MiniKit.user.username)
   if (cached) return cached
 
-  const address = MiniKit.user.walletAddress
-  if (!address) return undefined
-
+  // MiniKit.user.walletAddress may not be populated yet right after walletAuth
+  // (async SDK state). getUserByAddress's address arg is optional — passing the
+  // wallet address when we have it, or letting the SDK fall back to its internal
+  // state when we don't, avoids bailing early with undefined.
   try {
-    const userInfo = await MiniKit.getUserByAddress(address)
+    const userInfo = await MiniKit.getUserByAddress(MiniKit.user.walletAddress)
     return sanitizeUsername(userInfo.username) ?? undefined
   } catch {
     return undefined

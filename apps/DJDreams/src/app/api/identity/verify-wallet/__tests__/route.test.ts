@@ -8,6 +8,7 @@ const mockRequireSession = jest.fn()
 const mockUpdateSessionUsername = jest.fn()
 const mockUpdateSessionWalletAuth = jest.fn()
 const mockConsumeNonce = jest.fn()
+const mockResolveUsernameByAddress = jest.fn()
 
 // Override the global jest.setup.js mock for @worldcoin/minikit-js so the route
 // picks up our mocked verifySiweMessage instead of the browser-only MiniKit stub.
@@ -23,6 +24,10 @@ jest.mock('@/lib/domains/identity/auth', () => ({
 jest.mock('@/lib/domains/identity/session', () => ({
   updateSessionUsername: (...args: unknown[]) => mockUpdateSessionUsername(...args),
   updateSessionWalletAuth: (...args: unknown[]) => mockUpdateSessionWalletAuth(...args),
+}))
+
+jest.mock('@/lib/domains/identity/world-usernames-server', () => ({
+  resolveUsernameByAddress: (...args: unknown[]) => mockResolveUsernameByAddress(...args),
 }))
 
 jest.mock('@/lib/domains/identity/nonce-store', () => {
@@ -67,6 +72,10 @@ describe('POST /api/identity/verify-wallet', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockConsumeNonce.mockReturnValue(true)
+    // By default the public usernames service returns no username, so the route
+    // falls back to the client hint / session name. Per-test overrides simulate
+    // a successful server-side resolution.
+    mockResolveUsernameByAddress.mockResolvedValue(null)
     mockVerifySiwe.mockResolvedValue({
       isValid: true,
       siweMessageData: { address: '0xWALLET' },
@@ -173,8 +182,69 @@ describe('POST /api/identity/verify-wallet', () => {
       'n',
       expect.any(String)
     )
+    expect(mockResolveUsernameByAddress).toHaveBeenCalledWith('0xWALLET')
     expect(mockUpdateSessionWalletAuth).toHaveBeenCalledWith('0xabc123', 'alice', '0xWALLET')
     expect(mockUpdateSessionUsername).not.toHaveBeenCalled()
+  })
+
+  it('resolves the username server-side from the SIWE address and stores it', async () => {
+    mockRequireSession.mockResolvedValueOnce({ session: SESSION })
+    mockResolveUsernameByAddress.mockResolvedValueOnce('realname')
+    mockUpdateSessionWalletAuth.mockResolvedValueOnce({
+      ...SESSION,
+      username: 'realname',
+      wallet_address: '0xWALLET',
+    })
+
+    const res = await POST(
+      makeRequest({ payload: makePayload(), nonce: 'n', nullifier: '0xabc123' })
+    )
+    expect(res.status).toBe(200)
+
+    const body = await res.json()
+    expect(body.data.username).toBe('realname')
+    expect(mockResolveUsernameByAddress).toHaveBeenCalledWith('0xWALLET')
+    expect(mockUpdateSessionWalletAuth).toHaveBeenCalledWith('0xabc123', 'realname', '0xWALLET')
+  })
+
+  it('prefers the server-resolved username over the client hint', async () => {
+    mockRequireSession.mockResolvedValueOnce({ session: SESSION })
+    mockResolveUsernameByAddress.mockResolvedValueOnce('realname')
+    mockUpdateSessionWalletAuth.mockResolvedValueOnce({
+      ...SESSION,
+      username: 'realname',
+      wallet_address: '0xWALLET',
+    })
+
+    await POST(
+      makeRequest({
+        payload: makePayload(),
+        nonce: 'n',
+        nullifier: '0xabc123',
+        username: 'clienthint',
+      })
+    )
+    expect(mockUpdateSessionWalletAuth).toHaveBeenCalledWith('0xabc123', 'realname', '0xWALLET')
+  })
+
+  it('falls back to the client hint when the server resolver returns null', async () => {
+    mockRequireSession.mockResolvedValueOnce({ session: SESSION })
+    mockResolveUsernameByAddress.mockResolvedValueOnce(null)
+    mockUpdateSessionWalletAuth.mockResolvedValueOnce({
+      ...SESSION,
+      username: 'clienthint',
+      wallet_address: '0xWALLET',
+    })
+
+    await POST(
+      makeRequest({
+        payload: makePayload(),
+        nonce: 'n',
+        nullifier: '0xabc123',
+        username: 'clienthint',
+      })
+    )
+    expect(mockUpdateSessionWalletAuth).toHaveBeenCalledWith('0xabc123', 'clienthint', '0xWALLET')
   })
 
   it('keeps the fallback username when no username is provided', async () => {
